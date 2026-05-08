@@ -11,7 +11,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import pandas as pd
 import pdfplumber
 from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -795,7 +795,6 @@ async def analytics_recurring(project_id: str, lookback_months: int = 6):
         last_seen = sorted_items[-1]["date"]
         # next expected
         next_dt = datetime.strptime(last_seen, "%Y-%m-%d")
-        from datetime import timedelta
         next_expected = (next_dt + timedelta(days=int(round(avg_gap)))).strftime("%Y-%m-%d")
 
         # representative description

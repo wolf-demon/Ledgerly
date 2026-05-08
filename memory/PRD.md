@@ -1,33 +1,44 @@
 # Ledgerly — Personal Finance Categorizer
 
 ## Original Problem Statement
-Web app to import monthly bank statements (CSV/PDF), categorize transactions into income/expense groups, learn rules so recurring merchants auto-classify, and visualize yearly/monthly breakdowns. Multiple projects (e.g. Personal, Business). Currency: GBP. No login.
+Web app to import monthly bank statements (CSV/PDF), categorize transactions, learn rules, and visualize yearly/monthly breakdowns. Multiple projects. GBP. Single-user. Plus native Windows/Mac builds via Electron.
 
 ## Architecture
 - **Frontend**: React 19 + TailwindCSS + Shadcn UI + Recharts + Framer Motion
 - **Backend**: FastAPI + Motor (MongoDB) + pandas + pdfplumber + emergentintegrations (Claude Sonnet 4.5)
+- **Desktop**: Electron 32 + electron-builder (in `/desktop`)
 - **DB collections**: projects, categories, transactions, rules
 
-## Implemented (2026-02-08)
-- Multi-project switcher with default category seeding (9 cats)
+## Implemented
+### Iteration 1 (2026-02-08)
+- Multi-project switcher with default category seeding
 - CSV & PDF upload with auto column detection and dedupe
-- AI category suggestion (Claude Sonnet 4.5 via Emergent LLM key)
-- Rule learning: "Apply to similar" creates a normalized merchant rule and back-applies
+- AI category suggestion (Claude Sonnet 4.5)
+- Rule learning + back-apply
 - Categories CRUD with color palette
-- Transactions list with search, uncategorized filter, inline categorize dialog
-- Dashboard: cashflow bar chart, expense pie, summary cards (income/expense/net/savings rate), recent tx
-- Yearly Report: category × month heatmap (income & expense tabs), category drill-down with monthly bars + transactions
+- Transactions list with categorize dialog
+- Dashboard: cashflow + pie + summary cards
+- Yearly heatmap report with category drill-down
 
-## User Personas
-- Single user with personal/business/joint household projects on one device
+### Iteration 2 (2026-02-08)
+- Uncategorized rows split into income/expense buckets in heatmap
+- **Bulk categorize** (multi-select with optional "remember rule")
+- **CSV export** of all transactions
+- **Recurring transaction detector + monthly forecast** page
+- **Electron desktop wrapper** (`/desktop/`) with Windows/macOS/Linux builders
+- GitHub Actions workflow `.github/workflows/desktop-build.yml` for cross-platform CI builds
+- README + desktop/README with full build instructions
 
 ## Test Credentials
 N/A (no auth)
 
-## Backlog (future)
-- P1: Render "Uncategorized" row in Reports heatmap explicitly
-- P1: Export to CSV / multi-month PDF report
-- P1: Bulk categorize selected transactions
-- P2: Recurring transaction detection / forecasts
-- P2: Multiple bank account merging in a single project
-- P2: Electron/PWA desktop installer
+## Test Reports
+- `/app/test_reports/iteration_1.json` — 15/15 backend, 100% frontend
+- `/app/test_reports/iteration_2.json` — 11/11 new backend, 100% new frontend
+
+## Backlog
+- P1: Refactor server.py (~860 lines) into routers/ subpackage
+- P1: Bank-specific PDF parser overrides (Lloyds, Monzo, Starling) for tricky layouts
+- P2: Budget targets per category with progress bars
+- P2: Replace MongoDB with embedded SQLite for true single-binary desktop app
+- P2: Auto-update channel for desktop binaries

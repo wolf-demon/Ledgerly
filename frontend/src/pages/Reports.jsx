@@ -45,7 +45,7 @@ export default function Reports() {
 
   const cellShade = (val, color) => {
     const ratio = Math.abs(val) / maxVal;
-    const opacity = ratio === 0 ? 0 : Math.max(0.08, ratio);
+    const opacity = ratio === 0 ? 0 : Math.max(0.18, ratio);
     return { backgroundColor: color, opacity };
   };
 
