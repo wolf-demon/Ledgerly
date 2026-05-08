@@ -102,7 +102,28 @@ N/A (no auth)
   - Runtime overrides: `LEDGERLY_UPDATE_FEED` (custom feed URL) and `LEDGERLY_UPDATE_CHANNEL` (beta/alpha channels).
   - `desktop/README.md` — full new section covering GitHub Releases publishing, custom feeds, pre-release channels, code-signing requirements.
 
+### Iteration 9 (2026-02-08) — Budget tracker
+
+**Backend:**
+- New `budgets` table in SQLite (`id, project_id, category_id, period, amount, rollover, created_at`).
+- New `Budget` + `BudgetUpsert` models.
+- New `routes/budgets.py`: GET/POST/DELETE `/api/budgets`, `GET /api/budgets/progress?project_id=X&year=Y&month=M`.
+- POST upserts by (project, category, period); `amount=0` deletes.
+- **Rollover** (monthly only): walks back ≤11 prior consecutive rollover months and accumulates `max(0, base − prior_spent)` into `effective_amount`.
+- **Cascade delete**: `delete_project` and `delete_category` cascade into budgets.
+- Income categories supported symmetrically as targets.
+
+**Frontend:**
+- New `/budgets` page (sidebar between Categories and Yearly Report), per-category amount + period (monthly/yearly) + rollover switch + live progress bar.
+- Status colors: green ok / tan warn (≥80%) / red over (≥100%); over-budget banner at the top.
+- New `BudgetSummary` Dashboard widget: empty CTA when no budgets, top-5 progress bars + "X on track · Y over" otherwise.
+
+**Tests:**
+- New `/app/backend/tests/test_iteration8_budgets.py` — 14 cases.
+- Result: **14/14 new + 81/82 regression = 95/96 passing**, frontend e2e 12/12.
+
 ## Backlog
 - P1: Bank-specific PDF parser overrides (Lloyds, Monzo, Starling)
-- P2: Budget targets per category with progress bars
 - P2: PRAGMA integrity_check on startup with WAL-orphan warning
+- P2: In-app "Updates" banner driven by IPC bridge from `updater.js`
+- P2: Sync Dashboard BudgetSummary period with `/budgets` page selector (cosmetic)
