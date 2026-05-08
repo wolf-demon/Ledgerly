@@ -4,7 +4,7 @@ import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { Cloud, Server, Power, ExternalLink, CheckCircle2, AlertCircle, Loader2, Wand2, Copy } from "lucide-react";
+import { Cloud, Server, Power, ExternalLink, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 const PROVIDERS = [
@@ -41,6 +41,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [showKey, setShowKey] = useState(false);
+  const [emergentTesting, setEmergentTesting] = useState(false);
+  const [emergentResult, setEmergentResult] = useState(null);
 
   useEffect(() => {
     api.get("/settings").then((r) => {
@@ -93,6 +96,23 @@ export default function Settings() {
     }
   };
 
+  const testEmergent = async () => {
+    setEmergentTesting(true);
+    setEmergentResult(null);
+    try {
+      const res = await api.post("/settings/test-emergent", {
+        emergent_key: settings.emergent_key || "",
+      });
+      setEmergentResult(res.data);
+      if (res.data.reachable) toast.success("Emergent key is working.");
+      else toast.error("Emergent key test failed.");
+    } catch {
+      toast.error("Test failed");
+    } finally {
+      setEmergentTesting(false);
+    }
+  };
+
   const copyCmd = (cmd) => {
     navigator.clipboard?.writeText(cmd);
     toast.success("Copied");
@@ -142,6 +162,91 @@ export default function Settings() {
           })}
         </div>
       </Card>
+
+      {/* Emergent key (only when emergent provider) */}
+      {settings.ai_provider === "emergent" && (
+        <Card className="p-6 bg-white border-[#EAE3D9] shadow-none" data-testid="emergent-settings">
+          <h3 className="text-lg font-medium" style={{ fontFamily: "Work Sans" }}>Emergent LLM key</h3>
+          <p className="text-xs text-[#656C5A] mt-1 mb-5">
+            Used to call Claude Sonnet 4.5 via Emergent's hosted proxy. The desktop installer ships with a built-in key,
+            so this is only needed if you want to use your own (e.g. for a higher quota).
+          </p>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="emergent-key">API key</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="emergent-key"
+                  data-testid="emergent-key-input"
+                  type={showKey ? "text" : "password"}
+                  value={settings.emergent_key || ""}
+                  onChange={(e) => update({ emergent_key: e.target.value })}
+                  placeholder="sk-emergent-..."
+                  className="bg-white border-[#EAE3D9] flex-1 font-mono text-sm"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowKey((s) => !s)}
+                  data-testid="toggle-key-visibility"
+                  className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
+                  aria-label={showKey ? "Hide key" : "Show key"}
+                >
+                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-[#656C5A]">
+                Get one from{" "}
+                <a href="https://app.emergent.sh" target="_blank" rel="noreferrer" className="text-[#364C2E] underline">
+                  app.emergent.sh
+                </a>
+                {" "}→ Profile → Universal Key. Leave blank to use the bundled default.
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              onClick={testEmergent}
+              disabled={emergentTesting}
+              data-testid="test-emergent-btn"
+              variant="outline"
+              className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
+            >
+              {emergentTesting ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Testing...</>) : (<><Wand2 className="w-4 h-4 mr-2" /> Test connection</>)}
+            </Button>
+
+            {emergentResult && (
+              <div
+                className={`p-3 rounded-md text-sm border ${
+                  emergentResult.reachable
+                    ? "bg-[#4B6B40]/10 border-[#4B6B40]/30"
+                    : "bg-[#D96C4E]/8 border-[#D96C4E]/30"
+                }`}
+                data-testid="emergent-test-result"
+              >
+                {emergentResult.reachable ? (
+                  <div className="flex items-center gap-2 font-medium text-[#1F2E1B]">
+                    <CheckCircle2 className="w-4 h-4 text-[#4B6B40]" />
+                    Key works — responded with: <code className="text-xs">{emergentResult.sample}</code>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 font-medium">
+                      <AlertCircle className="w-4 h-4 text-[#D96C4E]" />
+                      Test failed
+                    </div>
+                    <div className="text-xs text-[#656C5A] mt-1">{emergentResult.error}</div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Ollama settings (only when ollama is selected) */}
       {settings.ai_provider === "ollama" && (

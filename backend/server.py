@@ -611,6 +611,15 @@ async def update_transaction(tx_id: str, payload: TransactionUpdate):
     update: Dict[str, Any] = {}
     if payload.category_id is not None:
         update["category_id"] = payload.category_id
+        # Force amount sign + tx type to match the category's type.
+        cat = await db.categories.find_one({"id": payload.category_id}, {"_id": 0})
+        if cat:
+            update["type"] = cat["type"]
+            cur_amt = float(tx.get("amount", 0))
+            if cat["type"] == "expense" and cur_amt > 0:
+                update["amount"] = -abs(cur_amt)
+            elif cat["type"] == "income" and cur_amt < 0:
+                update["amount"] = abs(cur_amt)
     if payload.description is not None:
         update["description"] = payload.description
     if update:
@@ -620,7 +629,6 @@ async def update_transaction(tx_id: str, payload: TransactionUpdate):
     if payload.apply_to_similar and payload.category_id:
         key = normalize_merchant(tx["description"])
         if key:
-            # upsert rule
             existing_rule = await db.rules.find_one({"project_id": tx["project_id"], "pattern": key})
             if existing_rule:
                 await db.rules.update_one(
@@ -634,15 +642,23 @@ async def update_transaction(tx_id: str, payload: TransactionUpdate):
                 rdoc = rule.model_dump()
                 rdoc['created_at'] = rdoc['created_at'].isoformat()
                 await db.rules.insert_one(rdoc)
-            # apply to all matching uncategorized
+            # apply to all matching, fixing sign too
+            cat = await db.categories.find_one({"id": payload.category_id}, {"_id": 0})
+            cat_type = cat["type"] if cat else None
             all_tx = await db.transactions.find(
                 {"project_id": tx["project_id"]}, {"_id": 0}
             ).to_list(10000)
             for t in all_tx:
                 if normalize_merchant(t["description"]) == key and t.get("category_id") != payload.category_id:
-                    await db.transactions.update_one(
-                        {"id": t["id"]}, {"$set": {"category_id": payload.category_id}}
-                    )
+                    sub_update: Dict[str, Any] = {"category_id": payload.category_id}
+                    if cat_type:
+                        sub_update["type"] = cat_type
+                        cur = float(t.get("amount", 0))
+                        if cat_type == "expense" and cur > 0:
+                            sub_update["amount"] = -abs(cur)
+                        elif cat_type == "income" and cur < 0:
+                            sub_update["amount"] = abs(cur)
+                    await db.transactions.update_one({"id": t["id"]}, {"$set": sub_update})
                     affected_similar += 1
     return {"ok": True, "affected_similar": affected_similar}
 
@@ -653,16 +669,33 @@ async def delete_transaction(tx_id: str):
 
 @api_router.post("/transactions/reclassify")
 async def reclassify_transactions(project_id: str = Query(...)):
-    """Re-derive each transaction's type (income/expense) from its amount sign.
-    Useful after fixing parser bugs that produced wrong-signed amounts."""
+    """Repair transaction signs + types.
+    - For categorized transactions: sign + type follow the assigned category's type.
+    - For uncategorized: type is derived from the current amount sign.
+    Useful after fixing parser bugs that produced wrong-signed amounts.
+    """
+    cats = await db.categories.find({"project_id": project_id}, {"_id": 0}).to_list(500)
+    cat_type = {c["id"]: c["type"] for c in cats}
     txs = await db.transactions.find({"project_id": project_id}, {"_id": 0}).to_list(100000)
     fixed = 0
     for t in txs:
-        correct_type = "income" if float(t["amount"]) >= 0 else "expense"
-        if t.get("type") != correct_type:
-            await db.transactions.update_one(
-                {"id": t["id"]}, {"$set": {"type": correct_type}}
-            )
+        cur_amt = float(t.get("amount", 0))
+        cid = t.get("category_id")
+        update: Dict[str, Any] = {}
+        if cid and cid in cat_type:
+            target = cat_type[cid]
+            if target == "expense" and cur_amt > 0:
+                update["amount"] = -abs(cur_amt)
+            elif target == "income" and cur_amt < 0:
+                update["amount"] = abs(cur_amt)
+            if t.get("type") != target:
+                update["type"] = target
+        else:
+            correct = "income" if cur_amt >= 0 else "expense"
+            if t.get("type") != correct:
+                update["type"] = correct
+        if update:
+            await db.transactions.update_one({"id": t["id"]}, {"$set": update})
             fixed += 1
     return {"checked": len(txs), "fixed": fixed}
 
@@ -672,11 +705,13 @@ class AppSettings(BaseModel):
     ai_provider: str = "emergent"          # "emergent" | "ollama" | "none"
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
+    emergent_key: str = ""                  # Optional override for the Emergent LLM key.
 
 class SettingsUpdate(BaseModel):
     ai_provider: Optional[str] = None
     ollama_url: Optional[str] = None
     ollama_model: Optional[str] = None
+    emergent_key: Optional[str] = None
 
 SETTINGS_ID = "default"
 
@@ -737,10 +772,29 @@ async def test_ollama(payload: SettingsUpdate):
         models = []
     return {"reachable": True, "models": models}
 
+@api_router.post("/settings/test-emergent")
+async def test_emergent(payload: SettingsUpdate):
+    """Verifies the Emergent LLM key (or the bundled env key) by issuing a tiny chat request."""
+    key = (payload.emergent_key or "").strip() or EMERGENT_LLM_KEY
+    if not key:
+        return {"reachable": False, "error": "No key set. Paste your Emergent LLM key, or leave blank to use the bundled key."}
+    try:
+        chat = LlmChat(
+            api_key=key,
+            session_id=f"test-{uuid.uuid4()}",
+            system_message="Reply with the single word OK.",
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        resp = await chat.send_message(UserMessage(text="ping"))
+        text = (resp if isinstance(resp, str) else str(resp)).strip()[:80]
+        return {"reachable": True, "sample": text}
+    except Exception as e:
+        msg = str(e)
+        return {"reachable": False, "error": f"Emergent key test failed: {msg[:200]}"}
+
 # ----- AI Suggestion -----
-async def _suggest_via_emergent(sys_msg: str, user_text: str) -> str:
+async def _suggest_via_emergent(sys_msg: str, user_text: str, key: str) -> str:
     chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
+        api_key=key,
         session_id=f"cat-{uuid.uuid4()}",
         system_message=sys_msg,
     ).with_model("anthropic", "claude-sonnet-4-5-20250929")
@@ -782,8 +836,9 @@ async def suggest_category(payload: SuggestRequest):
 
     if provider == "none":
         return {"suggested_category_id": None, "suggested_name": None, "reason": "AI suggestions disabled in Settings."}
-    if provider == "emergent" and not EMERGENT_LLM_KEY:
-        return {"suggested_category_id": None, "suggested_name": None, "reason": "Emergent LLM key not configured."}
+    emergent_key = (settings.emergent_key or "").strip() or EMERGENT_LLM_KEY
+    if provider == "emergent" and not emergent_key:
+        return {"suggested_category_id": None, "suggested_name": None, "reason": "No Emergent LLM key configured. Open Settings to paste your key."}
 
     sys_msg = (
         "You are a personal finance assistant. Given a bank transaction description and amount, "
@@ -802,7 +857,7 @@ async def suggest_category(payload: SuggestRequest):
         if provider == "ollama":
             text = _suggest_via_ollama(sys_msg, user_text, settings.ollama_url, settings.ollama_model)
         else:
-            text = await _suggest_via_emergent(sys_msg, user_text)
+            text = await _suggest_via_emergent(sys_msg, user_text, emergent_key)
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             parsed = json.loads(match.group(0))
@@ -825,6 +880,157 @@ async def suggest_category(payload: SuggestRequest):
         if provider == "ollama" and ("model" in msg.lower() and ("not found" in msg.lower() or "pull" in msg.lower())):
             msg = f"Ollama model '{settings.ollama_model}' not installed. Run `ollama pull {settings.ollama_model}` and try again."
         return {"suggested_category_id": None, "suggested_name": None, "reason": f"AI error: {msg[:200]}", "provider": provider}
+
+# ----- Batch AI categorization (auto-creates new categories) -----
+PALETTE = ["#364C2E", "#4B6B40", "#728A66", "#D96C4E", "#D1A77E", "#E3C8AA", "#8B5E3C", "#9E7B58"]
+
+class BulkSuggestPayload(BaseModel):
+    project_id: str
+    only_uncategorized: bool = True
+    allow_create: bool = True
+    max_items: int = 200
+
+@api_router.post("/transactions/bulk-suggest")
+async def bulk_suggest(payload: BulkSuggestPayload):
+    """Run the configured AI provider over many transactions in one go.
+    Optionally creates new categories when none of the existing ones fit.
+    """
+    proj = await db.projects.find_one({"id": payload.project_id}, {"_id": 0})
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    settings = await _get_settings()
+    provider = settings.ai_provider
+    if provider == "none":
+        raise HTTPException(status_code=400, detail="AI provider is set to Disabled. Open Settings to enable Emergent or Ollama.")
+    emergent_key = (settings.emergent_key or "").strip() or EMERGENT_LLM_KEY
+    if provider == "emergent" and not emergent_key:
+        raise HTTPException(status_code=400, detail="No Emergent LLM key configured. Open Settings to paste your key.")
+
+    cats = await db.categories.find({"project_id": payload.project_id}, {"_id": 0}).to_list(500)
+    if not cats and not payload.allow_create:
+        raise HTTPException(status_code=400, detail="No categories defined and allow_create is false.")
+
+    q: Dict[str, Any] = {"project_id": payload.project_id}
+    if payload.only_uncategorized:
+        q["category_id"] = None
+    txs = await db.transactions.find(q, {"_id": 0}).to_list(payload.max_items)
+    if not txs:
+        return {"processed": 0, "categorized": 0, "created_categories": [], "errors": []}
+
+    # Group by normalized merchant key — categorize once per unique merchant.
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for t in txs:
+        k = normalize_merchant(t["description"]) or t["description"]
+        groups.setdefault(k, []).append(t)
+
+    created_categories: List[Dict[str, str]] = []
+    cat_by_name: Dict[str, Dict[str, Any]] = {c["name"].lower(): c for c in cats}
+    errors: List[str] = []
+    categorized = 0
+
+    sys_msg_template = (
+        "You are a personal finance assistant. Pick the best category for each bank transaction. "
+        "Prefer one of the EXISTING categories when reasonable. "
+        "{create_hint}"
+        "Respond ONLY with strict JSON of the form "
+        "{{\"category_name\": \"<name>\", \"is_new\": <true|false>, \"type\": \"<income|expense>\", \"reason\": \"<short>\"}}."
+    )
+    create_hint = (
+        "If none of the existing categories fit, you MAY suggest a brand new category — set is_new to true. "
+        if payload.allow_create else
+        "You MUST pick one of the existing categories — set is_new to false. "
+    )
+    sys_msg = sys_msg_template.format(create_hint=create_hint)
+
+    async def _ask_ai(desc: str, amount: float) -> Optional[Dict[str, Any]]:
+        existing_list = "\n".join([f"- {c['name']} ({c['type']})" for c in cat_by_name.values()]) or "(none yet)"
+        user_text = (
+            f"Transaction: {desc}\n"
+            f"Amount: {amount} GBP ({'income' if amount >= 0 else 'expense'})\n\n"
+            f"Existing categories:\n{existing_list}\n\n"
+            "Return JSON only."
+        )
+        try:
+            if provider == "ollama":
+                text = _suggest_via_ollama(sys_msg, user_text, settings.ollama_url, settings.ollama_model)
+            else:
+                text = await _suggest_via_emergent(sys_msg, user_text, emergent_key)
+            m = re.search(r'\{.*\}', text, re.DOTALL)
+            if not m:
+                return None
+            parsed = json.loads(m.group(0))
+            name = (parsed.get("category_name") or "").strip()
+            cat_type = (parsed.get("type") or "").strip().lower()
+            is_new = bool(parsed.get("is_new"))
+            if not name:
+                return None
+            if cat_type not in ("income", "expense"):
+                cat_type = "income" if amount >= 0 else "expense"
+            return {"name": name, "type": cat_type, "is_new": is_new, "reason": parsed.get("reason", "")}
+        except Exception as e:
+            errors.append(f"{desc[:40]}: {str(e)[:80]}")
+            return None
+
+    async def _resolve_category(name: str, cat_type: str, allow_new: bool) -> Optional[Dict[str, Any]]:
+        clean = re.sub(r'\s*\([^)]*\)\s*$', '', name).strip()
+        existing = cat_by_name.get(clean.lower()) or cat_by_name.get(name.lower())
+        if existing:
+            return existing
+        if not allow_new:
+            return None
+        # Create
+        color = PALETTE[len(cat_by_name) % len(PALETTE)]
+        cat = Category(project_id=payload.project_id, name=clean, type=cat_type, color=color)
+        cdoc = cat.model_dump()
+        cdoc['created_at'] = cdoc['created_at'].isoformat()
+        await db.categories.insert_one(cdoc)
+        created = {"id": cat.id, "name": cat.name, "type": cat.type, "color": cat.color, "project_id": payload.project_id}
+        cat_by_name[clean.lower()] = created
+        created_categories.append({"id": cat.id, "name": cat.name, "type": cat.type})
+        return created
+
+    for key, members in groups.items():
+        sample = members[0]
+        suggestion = await _ask_ai(sample["description"], float(sample["amount"]))
+        if not suggestion:
+            continue
+        cat = await _resolve_category(suggestion["name"], suggestion["type"], payload.allow_create)
+        if not cat:
+            continue
+        # Apply to all members of the group
+        for t in members:
+            cur = float(t.get("amount", 0))
+            new_amt = cur
+            if cat["type"] == "expense" and cur > 0:
+                new_amt = -abs(cur)
+            elif cat["type"] == "income" and cur < 0:
+                new_amt = abs(cur)
+            await db.transactions.update_one(
+                {"id": t["id"]},
+                {"$set": {"category_id": cat["id"], "type": cat["type"], "amount": new_amt}},
+            )
+            categorized += 1
+        # Persist as a rule so future imports auto-classify too
+        existing_rule = await db.rules.find_one({"project_id": payload.project_id, "pattern": key})
+        if existing_rule:
+            await db.rules.update_one(
+                {"project_id": payload.project_id, "pattern": key},
+                {"$set": {"category_id": cat["id"]}},
+            )
+        else:
+            rule = CategoryRule(project_id=payload.project_id, pattern=key, category_id=cat["id"])
+            rdoc = rule.model_dump()
+            rdoc['created_at'] = rdoc['created_at'].isoformat()
+            await db.rules.insert_one(rdoc)
+
+    return {
+        "processed": len(txs),
+        "categorized": categorized,
+        "created_categories": created_categories,
+        "errors": errors[:10],
+        "provider": provider,
+    }
 
 # ----- Analytics -----
 @api_router.get("/analytics/yearly")
@@ -964,13 +1170,28 @@ async def bulk_categorize(payload: BulkCategorizePayload):
     if not target_cat:
         raise HTTPException(status_code=404, detail="Category not found")
     project_id = target_cat["project_id"]
+    cat_type = target_cat["type"]
+
+    def _signed(amt: float) -> float:
+        if cat_type == "expense" and amt > 0:
+            return -abs(amt)
+        if cat_type == "income" and amt < 0:
+            return abs(amt)
+        return amt
+
     txs = await db.transactions.find(
         {"id": {"$in": payload.transaction_ids}, "project_id": project_id}, {"_id": 0}
     ).to_list(10000)
-    await db.transactions.update_many(
-        {"id": {"$in": [t["id"] for t in txs]}},
-        {"$set": {"category_id": payload.category_id}},
-    )
+    # Update each tx individually so we can flip its amount sign to match category type.
+    for t in txs:
+        await db.transactions.update_one(
+            {"id": t["id"]},
+            {"$set": {
+                "category_id": payload.category_id,
+                "type": cat_type,
+                "amount": _signed(float(t.get("amount", 0))),
+            }},
+        )
     rule_keys_added = 0
     similar_applied = 0
     if payload.apply_to_similar:
@@ -992,14 +1213,18 @@ async def bulk_categorize(payload: BulkCategorizePayload):
                 rdoc['created_at'] = rdoc['created_at'].isoformat()
                 await db.rules.insert_one(rdoc)
                 rule_keys_added += 1
-        # back-apply
         all_tx = await db.transactions.find({"project_id": project_id}, {"_id": 0}).to_list(50000)
         for t in all_tx:
             if t.get("category_id") == payload.category_id:
                 continue
             if normalize_merchant(t["description"]) in keys:
                 await db.transactions.update_one(
-                    {"id": t["id"]}, {"$set": {"category_id": payload.category_id}}
+                    {"id": t["id"]},
+                    {"$set": {
+                        "category_id": payload.category_id,
+                        "type": cat_type,
+                        "amount": _signed(float(t.get("amount", 0))),
+                    }},
                 )
                 similar_applied += 1
     return {

@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 7 testing complete. Verified the income/expense sign-flip fix on PUT /api/transactions/{id}, POST /api/transactions/bulk-categorize, apply_to_similar=true, and POST /api/transactions/reclassify. Confirmed analytics_yearly correctly moves a previously-positive amount from total_income to total_expense after assigning an expense category. Verified the new POST /api/transactions/bulk-suggest endpoint (provider=none -> 400, response shape with all expected keys, LLM call limited to 1 tx). Verified Settings.emergent_key field on GET/PUT/persist, and POST /api/settings/test-emergent (bundled env key -> reachable=true with sample; garbage key -> reachable=false with error). Frontend Settings emergent card (masked input + Eye toggle + Test connection error message) and Transactions auto-categorize button all wired correctly. Full backend regression: 67 passed, 1 skipped (xlwt absent — pre-existing).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration7.py",
+    "/app/test_reports/pytest/iteration_7.xml",
+    "/app/test_reports/pytest/iteration_7_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1410 lines — well past the 700-line guideline. Strongly recommend splitting into routers (settings.py, transactions.py, analytics.py, ai.py, parsers.py) before next feature iteration.",
+    "Sign-flip logic is duplicated in 4 places: update_transaction (single+similar), bulk_categorize (selected+similar), reclassify, bulk_suggest application loop. Extract a single helper `_signed(amount, cat_type)` and reuse it everywhere — currently each site reimplements the same `if expense and amt>0 -> -abs` ladder.",
+    "test-emergent endpoint returns 200 with reachable=false for a bad key (graceful pattern). That's fine, but make sure the frontend treats reachable=false as user-actionable (it does — Test failed card shown in screenshot).",
+    "_suggest_via_emergent and bulk_suggest both build their own LlmChat with anthropic claude-sonnet-4-5; consider centralising the model id / system message templates."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration7.py (new, 13 tests)"
+  ],
+  "success_rate": {"backend": "100% (67 passed / 1 skipped) — all 13 iter7 tests + 54 prior tests green", "frontend": "100% on critical iter7 flows (Settings emergent card + Transactions auto-categorize button)"},
+  "test_credentials": "n/a (no auth in this app); EMERGENT_LLM_KEY pre-set in /app/backend/.env",
+  "seed_data_creation": "TEST_Iter7 + TEST_Iter7_BulkSug + TEST_UI_Iter7 projects created and torn down within tests",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 13 iteration_7 backend tests + full regression (67 passed, 1 skipped) green. The bulk-suggest endpoint actually calls the LLM — kept costs low by using only 1 tx per suggest test. Sign-flip is the most important behavior — verified end-to-end via analytics_yearly check (uploaded +9.99, assigned expense category, total_expense increased by 9.99, total_income decreased correspondingly). Use `export $(grep -v '^#' /app/frontend/.env | xargs)` before pytest so REACT_APP_BACKEND_URL is populated. The Transactions page auto-categorize-btn is only rendered when a project is active — testers must select/create a project first.",
+  "rca of the issue": "n/a — no defects observed in iteration 7 changes"
+}

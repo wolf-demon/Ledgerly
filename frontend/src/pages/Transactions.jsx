@@ -10,7 +10,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuLabel, DropdownMenuSeparator,
 } from "../components/ui/dropdown-menu";
-import { Tag, Search, Trash2, Sparkles, Upload as UploadIcon, Download, Wand2, X, RefreshCw } from "lucide-react";
+import { Tag, Search, Trash2, Sparkles, Upload as UploadIcon, Download, Wand2, X, RefreshCw, Bot, Loader2 } from "lucide-react";
 import CategorizeDialog from "../components/CategorizeDialog";
 import { toast } from "sonner";
 
@@ -28,6 +28,7 @@ export default function Transactions() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [bulkApplyRule, setBulkApplyRule] = useState(true);
+  const [autoBusy, setAutoBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!active) return;
@@ -129,6 +130,35 @@ export default function Transactions() {
     }
   };
 
+  const autoCategorize = async () => {
+    const uncategorized = transactions.filter((t) => !t.category_id).length;
+    if (!window.confirm(
+      `Run AI over ${uncategorized} uncategorized transactions? ` +
+      `This may create new categories if none of the existing ones fit. ` +
+      `Make sure your AI provider is configured in Settings.`
+    )) return;
+    setAutoBusy(true);
+    try {
+      const res = await api.post("/transactions/bulk-suggest", {
+        project_id: active.id,
+        only_uncategorized: true,
+        allow_create: true,
+        max_items: 500,
+      });
+      const created = res.data.created_categories?.length || 0;
+      const errs = res.data.errors?.length || 0;
+      let msg = `Categorized ${res.data.categorized} of ${res.data.processed} transactions`;
+      if (created > 0) msg += ` and created ${created} new categor${created === 1 ? "y" : "ies"}`;
+      if (errs > 0) msg += ` (${errs} errors)`;
+      toast.success(msg);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Auto-categorize failed");
+    } finally {
+      setAutoBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4 flex-wrap">
@@ -139,6 +169,18 @@ export default function Transactions() {
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            onClick={autoCategorize}
+            disabled={autoBusy}
+            data-testid="auto-categorize-btn"
+            className="bg-[#364C2E] hover:bg-[#22331D] text-white"
+          >
+            {autoBusy ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Categorizing…</>
+            ) : (
+              <><Bot className="w-4 h-4 mr-2" /> Auto-categorize with AI</>
+            )}
+          </Button>
           <Button
             onClick={reclassify}
             variant="outline"
