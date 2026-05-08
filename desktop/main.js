@@ -23,7 +23,22 @@ function log(...args) {
 }
 
 function resolvePython() {
-  if (process.env.LEDGERLY_PYTHON) return process.env.LEDGERLY_PYTHON;
+  // 1. Explicit override
+  if (process.env.LEDGERLY_PYTHON && fs.existsSync(process.env.LEDGERLY_PYTHON)) {
+    return process.env.LEDGERLY_PYTHON;
+  }
+  // 2. Bundled python-build-standalone shipped via extraResources
+  const bundledRoot = isDev
+    ? path.join(__dirname, "python-runtime")
+    : path.join(process.resourcesPath, "python");
+  const candidates =
+    process.platform === "win32"
+      ? [path.join(bundledRoot, "python.exe")]
+      : [path.join(bundledRoot, "bin", "python3"), path.join(bundledRoot, "bin", "python")];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  // 3. Fallback to system python
   return process.platform === "win32" ? "python" : "python3";
 }
 
@@ -159,7 +174,7 @@ app.whenReady().then(async () => {
   if (!ok) {
     showFatal(
       "Could not start the local backend.",
-      "Python 3.11+ must be installed and on PATH (or set LEDGERLY_PYTHON to its full path).\nSee log for details."
+      "The bundled Python runtime appears to be missing or corrupted.\nPlease re-install Ledgerly. If the problem persists, set LEDGERLY_PYTHON to a working python3 executable.\nSee log for details."
     );
   } else {
     const ready = await waitForBackend();

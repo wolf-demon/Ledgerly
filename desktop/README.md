@@ -1,9 +1,9 @@
 # Ledgerly Desktop (Electron)
 
-Standalone desktop app for **Windows** and **macOS**. Stores everything in a local SQLite file — no MongoDB or other server required.
+Standalone desktop app for **Windows** and **macOS**. Stores everything in a local SQLite file and **bundles its own Python runtime** — end-users do not need MongoDB, Python, or anything else installed.
 
 ## Architecture
-- Electron main process (`main.js`) starts the FastAPI backend on `127.0.0.1:8001` as a child process and points it at a per-user SQLite file.
+- Electron main process (`main.js`) starts the FastAPI backend on `127.0.0.1:8001` as a child process, using the **bundled Python runtime** under `<resources>/python/`.
 - The packaged React build is loaded from `<resources>/frontend/index.html` (relative-asset paths via `homepage: "./"`, `HashRouter` for `file://` compatibility).
 - All app data is stored in:
   - **Windows**: `%APPDATA%\Ledgerly\ledgerly.db`
@@ -11,15 +11,14 @@ Standalone desktop app for **Windows** and **macOS**. Stores everything in a loc
   - **Linux**: `~/.config/Ledgerly/ledgerly.db`
 - A startup log is written to `<userData>/ledgerly.log` for troubleshooting.
 
-## Prerequisites (one-time)
+## Prerequisites — for the *developer building the installer*
 
-| Tool      | Why                                  | Install |
-|-----------|--------------------------------------|---------|
-| Node.js 20+ | Electron + frontend build           | https://nodejs.org |
-| Yarn      | Package manager                      | `npm i -g yarn` |
-| Python 3.11+ | Runs FastAPI backend              | https://python.org **(tick "Add Python to PATH" in the installer)** |
+| Tool      | Why                          | Install |
+|-----------|------------------------------|---------|
+| Node.js 20+ | Electron + frontend build  | https://nodejs.org |
+| Yarn      | Package manager              | `npm i -g yarn` |
 
-That's it — no MongoDB.
+That's it. Python is downloaded automatically by the build script (via [python-build-standalone](https://github.com/astral-sh/python-build-standalone)) and bundled inside the installer. **End users need nothing.**
 
 ## One-command build
 
@@ -39,7 +38,19 @@ cd desktop
 ./build.sh all                 # everything this machine can produce
 ```
 
-The script: pre-flight checks → pip install backend → React build (with `REACT_APP_BACKEND_URL=http://127.0.0.1:8001`) → `yarn install` in desktop/ → `electron-builder`. Output lands in `desktop/dist/`.
+The script:
+1. Checks Node + Yarn are installed.
+2. Downloads `python-build-standalone` (CPython 3.12.10) for the target platform — cached under `desktop/.cache/`.
+3. Pip-installs the backend's requirements.txt into the bundled runtime.
+4. Builds the React frontend with `REACT_APP_BACKEND_URL=http://127.0.0.1:8001`.
+5. Runs `electron-builder`, which ships:
+   - the React `build/` → `<resources>/frontend/`
+   - the FastAPI source → `<resources>/backend/`
+   - the bundled CPython → `<resources>/python/`
+
+Output lands in `desktop/dist/`.
+
+> **Installer size**: expect ~150 MB compressed (Python runtime + pip deps add ~80 MB; the rest is Electron + React build). This is normal for a self-contained desktop Python+Electron app.
 
 ## Cross-compilation honest note
 
@@ -49,37 +60,39 @@ The script: pre-flight checks → pip install backend → React build (with `REA
 | macOS   | `.dmg`, `.exe`, `.AppImage` | Signed Windows `.exe` codesigning needs Windows tooling |
 | Linux   | `.AppImage`, `.exe`        | Mac `.dmg` |
 
-For signed binaries on every platform, push a tag and let `.github/workflows/desktop-build.yml` build all three.
+For signed binaries on every platform from one tag push, use `.github/workflows/desktop-build.yml`.
 
 ## Troubleshooting
 
 ### "Blank white screen" after install
 Almost always one of:
 1. **Old build cached** — wipe `desktop/dist/` and re-run `.\build.ps1`.
-2. **Python not on PATH** — open `%APPDATA%\Ledgerly\ledgerly.log` (or `~/Library/Application Support/Ledgerly/ledgerly.log` on macOS) and look for "FATAL: failed to spawn python". Re-install Python with the **"Add Python to PATH"** checkbox ticked.
-3. **Frontend bundle missing** — the log will say "Frontend bundle not found". Re-run `.\build.ps1` (don't pass `-SkipFrontend` on the first build).
+2. **Frontend bundle missing** — log will say "Frontend bundle not found". Re-run `.\build.ps1` (don't pass `-SkipFrontend` on the first build).
+3. **Bundled Python missing** — log will say "Could not start backend". Re-run `.\build.ps1` (do not delete `desktop/python-runtime` between runs).
 
 ### Open DevTools to inspect errors
 ```powershell
 $env:LEDGERLY_DEBUG=1
-& "C:\Users\you\AppData\Local\Programs\ledgerly\Ledgerly.exe"
+& "$env:LOCALAPPDATA\Programs\ledgerly\Ledgerly.exe"
 ```
-DevTools opens in a side panel; check the **Console** and **Network** tabs.
-
-### Backend dependencies fail to install
-Run manually:
+On macOS:
 ```bash
-cd backend
-python -m pip install -r requirements.txt
+LEDGERLY_DEBUG=1 open -a Ledgerly
 ```
 
 ### Reset all data
-Quit Ledgerly, then delete `%APPDATA%\Ledgerly\ledgerly.db` (Windows) or the equivalent on macOS / Linux. Next launch creates a fresh DB.
+Quit Ledgerly, then delete `%APPDATA%\Ledgerly\ledgerly.db` (Windows) or `~/Library/Application Support/Ledgerly/ledgerly.db` (macOS). Next launch creates a fresh DB.
+
+### Force a re-download of the bundled Python
+```powershell
+.\scripts\download-python.ps1 -Target win -Force
+```
+or simply delete `desktop/.cache/` and `desktop/python-runtime/` and rebuild.
 
 ## Develop locally (hot reload)
 
 ```bash
-# Terminal 1 — backend
+# Terminal 1 — backend (uses your system python in dev)
 cd backend && python -m uvicorn server:app --reload --port 8001
 
 # Terminal 2 — React dev server

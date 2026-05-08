@@ -1,0 +1,22 @@
+# Runtime-only requirements for the bundled desktop build.
+# Strips dev tools (pytest, black, isort, mypy, flake8) and unused libraries
+# (boto3, stripe, oauthlib, python-jose, jq, s5cmd, requests-oauthlib).
+# Keeps emergentintegrations for AI category suggestion via Emergent LLM key.
+
+fastapi==0.110.1
+uvicorn==0.25.0
+python-dotenv>=1.0.1
+python-multipart>=0.0.9
+pydantic>=2.6.4
+email-validator>=2.2.0
+
+# Storage (SQLite default for desktop; motor/pymongo kept optional via STORAGE=mongo)
+aiosqlite>=0.22.1
+
+# CSV / PDF parsing
+pandas>=2.2.0
+numpy>=1.26.0
+pdfplumber>=0.11.0
+
+# AI category suggestion via Claude Sonnet 4.5 (Emergent LLM key)
+emergentintegrations==0.1.0

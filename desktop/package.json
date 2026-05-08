@@ -46,6 +46,11 @@
           "!ledgerly.db",
           "!ledgerly.db-*"
         ]
+      },
+      {
+        "from": "python-runtime",
+        "to": "python",
+        "filter": ["**/*", "!**/__pycache__/**", "!**/*.pyc"]
       }
     ],
     "win": {

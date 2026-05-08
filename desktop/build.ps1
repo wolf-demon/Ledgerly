@@ -44,13 +44,12 @@ function Assert-Cmd($name, $hint) {
 Write-Step "Pre-flight checks"
 Assert-Cmd "node"   "Install Node.js 20+ from https://nodejs.org"
 Assert-Cmd "yarn"   "Run: npm install -g yarn"
-Assert-Cmd "python" "Install Python 3.11+ from https://python.org (must be on PATH)"
+# Python is bundled — no longer required on the build machine.
 
 $nodeVer   = (& node --version).Trim()
-$pythonVer = (& python --version 2>&1).ToString().Trim()
 Write-Host "  node   : $nodeVer"
 Write-Host "  yarn   : $(& yarn --version)"
-Write-Host "  python : $pythonVer"
+Write-Host "  python : (will be bundled via python-build-standalone)"
 
 # 2. Resolve targets -----------------------------------------------------
 $os = if ($IsWindows -or $env:OS -eq "Windows_NT") { "win" }
@@ -71,10 +70,17 @@ switch ($Targets) {
 Write-Host "  targets: $($targetList -join ', ')"
 
 # 3. Install Python deps -------------------------------------------------
-Write-Step "Installing Python backend dependencies"
-Push-Location (Join-Path $RepoRoot "backend")
-& python -m pip install --quiet -r requirements.txt
-Pop-Location
+Write-Step "Bundling standalone Python runtime + backend dependencies"
+foreach ($t in $targetList) {
+    $pythonTarget = switch ($t) {
+        "win"   { "win" }
+        "mac"   { if ($IsMacOS -and (uname -m) -eq "arm64") { "mac-arm" } else { "mac-x64" } }
+        "linux" { "linux" }
+        default { "win" }
+    }
+    & (Join-Path $ScriptDir "scripts\download-python.ps1") -Target $pythonTarget
+    if ($LASTEXITCODE -ne 0) { throw "download-python.ps1 failed for $t" }
+}
 
 # 4. Build the React frontend -------------------------------------------
 if (-not $SkipFrontend) {

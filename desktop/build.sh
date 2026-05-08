@@ -20,10 +20,10 @@ need() { command -v "$1" >/dev/null 2>&1 || { echo "ERROR: '$1' not on PATH. $2"
 step "Pre-flight checks"
 need node "Install Node.js 20+ from https://nodejs.org"
 need yarn "Run: npm install -g yarn"
-need python3 "Install Python 3.11+"
+# Python is bundled via python-build-standalone — no longer a host requirement.
 echo "  node   : $(node --version)"
 echo "  yarn   : $(yarn --version)"
-echo "  python : $(python3 --version)"
+echo "  python : (will be bundled)"
 
 uname_s=$(uname -s)
 case "$uname_s" in
@@ -44,8 +44,16 @@ case "$TARGET" in
 esac
 echo "  targets: ${TARGETS[*]}"
 
-step "Installing Python backend dependencies"
-( cd "$REPO_ROOT/backend" && python3 -m pip install --quiet -r requirements.txt )
+step "Bundling standalone Python runtime + backend dependencies"
+for t in "${TARGETS[@]}"; do
+  case "$t" in
+    win)   PY_TARGET="win" ;;
+    mac)   if [ "$(uname -m)" = "arm64" ]; then PY_TARGET="mac-arm"; else PY_TARGET="mac-x64"; fi ;;
+    linux) PY_TARGET="linux" ;;
+    *)     PY_TARGET="$t" ;;
+  esac
+  bash "$DESKTOP/scripts/download-python.sh" "$PY_TARGET"
+done
 
 step "Building React frontend"
 ( cd "$FRONTEND" && yarn install --frozen-lockfile && REACT_APP_BACKEND_URL="$BACKEND_URL" yarn build )

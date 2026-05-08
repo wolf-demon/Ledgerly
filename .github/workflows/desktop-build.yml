@@ -24,26 +24,20 @@ jobs:
         with:
           node-version: "20"
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      # No setup-python step — the build script downloads python-build-standalone
+      # and bundles it into the installer.
 
-      - name: Install backend deps (used by electron-builder when packaging)
-        run: pip install -r backend/requirements.txt
-
-      - name: Build frontend
-        working-directory: frontend
-        env:
-          REACT_APP_BACKEND_URL: http://127.0.0.1:8001
-        run: |
-          yarn install --frozen-lockfile
-          yarn build
-
-      - name: Build Electron desktop binary
+      - name: Build desktop binary (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
         working-directory: desktop
-        run: |
-          yarn install --frozen-lockfile
-          yarn dist:${{ matrix.target }}
+        run: .\build.ps1 -Targets ${{ matrix.target }}
+
+      - name: Build desktop binary (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        working-directory: desktop
+        run: ./build.sh ${{ matrix.target }}
 
       - uses: actions/upload-artifact@v4
         with:

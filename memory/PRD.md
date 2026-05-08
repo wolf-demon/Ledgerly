@@ -37,12 +37,19 @@ N/A (no auth)
 - `/app/test_reports/iteration_2.json` — 11/11 new backend, 100% new frontend
 - `/app/test_reports/iteration_3.json` — 26/26 regression on SQLite, 100% smoke
 
-### Iteration 3 (2026-02-08) — SQLite swap
-- **Storage swap: MongoDB → SQLite** (default; switchable via `STORAGE` env var)
-- Thin Motor-compatible wrapper `/app/backend/sqlite_db.py` so `server.py` is unchanged
-- Desktop Electron build needs **no MongoDB** — single-binary friendly
-- Per-user SQLite DB stored under OS app-data dir
-- New `desktop/build.ps1` (PowerShell) and `desktop/build.sh` (bash) one-command build scripts
+### Iteration 4 (2026-02-08) — Bundled Python runtime
+- Desktop installer now bundles a complete CPython 3.12.13 runtime via [python-build-standalone](https://github.com/astral-sh/python-build-standalone)
+- New `desktop/scripts/download-python.{ps1,sh}` — downloads target-platform tarball, pip-installs `requirements-desktop.txt` into it, trims dev tools / unused SDKs
+- Slim `backend/requirements-desktop.txt` (12 packages vs 60+) keeps the runtime to ~500 MB
+- `desktop/main.js` resolves Python from: `LEDGERLY_PYTHON` env > bundled at `<resources>/python/` > system fallback
+- Build scripts no longer require Python on the developer's machine — only Node + Yarn
+- End users need **nothing pre-installed** — Ledgerly is a true single-click install
+
+### Iteration 3.1 (2026-02-08) — Electron blank-screen fixes
+- Added `homepage: "./"` to frontend/package.json (relative asset paths under `file://`)
+- App.js auto-uses `HashRouter` under `file://` protocol
+- `desktop/package.json` ships frontend/backend via `extraResources` (cleaner than `files` paths)
+- `desktop/main.js` writes `<userData>/ledgerly.log`, opens DevTools when `LEDGERLY_DEBUG=1`, shows OS dialog on fatal errors
 
 ## Backlog
 - P1: Refactor server.py (~860 lines) into routers/ subpackage when convenient
