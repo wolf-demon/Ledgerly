@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Receipt, Tags, Upload, BarChart3, Wallet, Plus, ChevronDown, Trash2, Repeat } from "lucide-react";
+import { LayoutDashboard, Receipt, Tags, Upload, BarChart3, Wallet, Plus, ChevronDown, Trash2, Repeat, Settings as SettingsIcon } from "lucide-react";
 import { useProject } from "../lib/projectContext";
 import {
   DropdownMenu,
@@ -21,6 +21,7 @@ const navItems = [
   { to: "/reports", label: "Yearly Report", icon: BarChart3 },
   { to: "/recurring", label: "Recurring", icon: Repeat },
   { to: "/upload", label: "Upload Statement", icon: Upload },
+  { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
 export default function Layout({ children, onNewProject }) {

@@ -70,6 +70,14 @@ _SCHEMAS: Dict[str, Dict[str, Any]] = {
         "indexed_fields": {"id", "project_id", "pattern", "category_id", "created_at"},
         "indexes": [("project_id", "pattern")],
     },
+    "settings": {
+        "columns": [
+            ("id", "TEXT PRIMARY KEY"),
+            ("created_at", "TEXT NOT NULL"),
+            ("data", "TEXT NOT NULL"),
+        ],
+        "indexed_fields": {"id", "created_at"},
+    },
 }
 
 

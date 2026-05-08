@@ -161,24 +161,51 @@ def _parse_dataframe(df: "pd.DataFrame") -> List[Dict[str, Any]]:
     """Shared row-extraction logic for CSV / TSV / Excel / ODS dataframes."""
     cols = list(df.columns)
     date_col = find_column(cols, ['date', 'posted', 'transaction date'])
-    desc_col = find_column(cols, ['description', 'detail', 'narrative', 'memo', 'particulars', 'reference', 'payee'])
-    amount_col = find_column(cols, ['amount'])
-    debit_col = find_column(cols, ['debit', 'paid out', 'withdrawal', 'money out'])
-    credit_col = find_column(cols, ['credit', 'paid in', 'deposit', 'money in'])
+    desc_col = find_column(cols, ['description', 'detail', 'narrative', 'memo', 'particulars', 'reference', 'payee', 'name'])
+    amount_col = find_column(cols, ['amount', 'value'])
+    debit_col = find_column(cols, ['debit', 'paid out', 'withdrawal', 'money out', 'out'])
+    credit_col = find_column(cols, ['credit', 'paid in', 'deposit', 'money in', 'in'])
+    type_col = find_column(cols, ['dr/cr', 'cr/dr', 'transaction type', 'txn type', 'type'])
+
+    # Avoid type_col matching the description column when banks use a column literally named "Type"
+    if type_col == desc_col:
+        type_col = None
+
+    DEBIT_HINTS = {"DR", "DEBIT", "D", "OUT", "PAYMENT", "WITHDRAWAL", "PURCHASE", "POS", "ATM"}
+    CREDIT_HINTS = {"CR", "CREDIT", "C", "IN", "DEPOSIT", "REFUND", "TRANSFER IN"}
+
     rows = []
     for _, r in df.iterrows():
         date_val = parse_date(r[date_col]) if date_col else None
         desc_val = str(r[desc_col]).strip() if desc_col and pd.notna(r[desc_col]) else ''
-        amt = None
-        if amount_col:
-            amt = parse_amount(r[amount_col])
-        if amt is None and (debit_col or credit_col):
+        amt: Optional[float] = None
+
+        # 1) Two-column Debit/Credit takes precedence (most reliable for UK banks).
+        if debit_col or credit_col:
             d = parse_amount(r[debit_col]) if debit_col else None
             c = parse_amount(r[credit_col]) if credit_col else None
             if d is not None and d != 0:
                 amt = -abs(d)
             elif c is not None and c != 0:
                 amt = abs(c)
+
+        # 2) Single Amount column — apply Type column hint if amount is unsigned.
+        if amt is None and amount_col:
+            raw = parse_amount(r[amount_col])
+            if raw is not None:
+                if type_col:
+                    type_val = str(r[type_col] or '').strip().upper()
+                    # Normalize so "DEBIT CARD PURCHASE" -> "DEBIT", etc.
+                    type_token = next((tok for tok in type_val.split() if tok in DEBIT_HINTS or tok in CREDIT_HINTS), type_val)
+                    if type_token in DEBIT_HINTS:
+                        amt = -abs(raw)
+                    elif type_token in CREDIT_HINTS:
+                        amt = abs(raw)
+                    else:
+                        amt = raw  # keep sign as-is
+                else:
+                    amt = raw
+
         if not date_val or not desc_val or amt is None:
             continue
         rows.append({"date": date_val, "description": desc_val, "amount": amt})
@@ -624,7 +651,123 @@ async def delete_transaction(tx_id: str):
     await db.transactions.delete_one({"id": tx_id})
     return {"ok": True}
 
+@api_router.post("/transactions/reclassify")
+async def reclassify_transactions(project_id: str = Query(...)):
+    """Re-derive each transaction's type (income/expense) from its amount sign.
+    Useful after fixing parser bugs that produced wrong-signed amounts."""
+    txs = await db.transactions.find({"project_id": project_id}, {"_id": 0}).to_list(100000)
+    fixed = 0
+    for t in txs:
+        correct_type = "income" if float(t["amount"]) >= 0 else "expense"
+        if t.get("type") != correct_type:
+            await db.transactions.update_one(
+                {"id": t["id"]}, {"$set": {"type": correct_type}}
+            )
+            fixed += 1
+    return {"checked": len(txs), "fixed": fixed}
+
+# ----- Settings -----
+class AppSettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    ai_provider: str = "emergent"          # "emergent" | "ollama" | "none"
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2"
+
+class SettingsUpdate(BaseModel):
+    ai_provider: Optional[str] = None
+    ollama_url: Optional[str] = None
+    ollama_model: Optional[str] = None
+
+SETTINGS_ID = "default"
+
+async def _get_settings() -> AppSettings:
+    doc = await db.settings.find_one({"id": SETTINGS_ID}, {"_id": 0})
+    if not doc:
+        return AppSettings()
+    return AppSettings(**{k: v for k, v in doc.items() if k in AppSettings.model_fields})
+
+async def _save_settings(settings: AppSettings):
+    existing = await db.settings.find_one({"id": SETTINGS_ID}, {"_id": 0})
+    payload = settings.model_dump()
+    payload["id"] = SETTINGS_ID
+    payload["created_at"] = (existing or {}).get("created_at") or datetime.now(timezone.utc).isoformat()
+    if existing:
+        await db.settings.update_one({"id": SETTINGS_ID}, {"$set": payload})
+    else:
+        await db.settings.insert_one(payload)
+
+@api_router.get("/settings", response_model=AppSettings)
+async def get_settings():
+    return await _get_settings()
+
+@api_router.put("/settings", response_model=AppSettings)
+async def update_settings(payload: SettingsUpdate):
+    current = await _get_settings()
+    new_data = current.model_dump()
+    for k, v in payload.model_dump(exclude_none=True).items():
+        new_data[k] = v
+    if new_data["ai_provider"] not in ("emergent", "ollama", "none"):
+        raise HTTPException(status_code=400, detail="ai_provider must be one of: emergent, ollama, none")
+    new_settings = AppSettings(**new_data)
+    await _save_settings(new_settings)
+    return new_settings
+
+@api_router.post("/settings/test-ollama")
+async def test_ollama(payload: SettingsUpdate):
+    """Pings an Ollama server. Returns reachable + list of installed models."""
+    import requests as _req
+    url = (payload.ollama_url or "http://localhost:11434").rstrip("/")
+    try:
+        r = _req.get(f"{url}/api/tags", timeout=4)
+    except _req.exceptions.ConnectionError:
+        return {
+            "reachable": False,
+            "error": (
+                "Could not reach Ollama. Make sure Ollama is installed and running. "
+                "Download from https://ollama.com/download, then run `ollama serve` if it isn't already."
+            ),
+        }
+    except Exception as e:
+        return {"reachable": False, "error": f"Connection error: {e}"}
+    if r.status_code != 200:
+        return {"reachable": False, "error": f"Ollama responded HTTP {r.status_code}"}
+    try:
+        models = [m.get("name", "") for m in r.json().get("models", [])]
+    except Exception:
+        models = []
+    return {"reachable": True, "models": models}
+
 # ----- AI Suggestion -----
+async def _suggest_via_emergent(sys_msg: str, user_text: str) -> str:
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"cat-{uuid.uuid4()}",
+        system_message=sys_msg,
+    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+    resp = await chat.send_message(UserMessage(text=user_text))
+    return resp.strip() if isinstance(resp, str) else str(resp)
+
+def _suggest_via_ollama(sys_msg: str, user_text: str, url: str, model: str) -> str:
+    import requests as _req
+    r = _req.post(
+        f"{url.rstrip('/')}/api/chat",
+        json={
+            "model": model,
+            "messages": [
+                {"role": "system", "content": sys_msg},
+                {"role": "user", "content": user_text},
+            ],
+            "stream": False,
+            "format": "json",
+            "options": {"temperature": 0.1},
+        },
+        timeout=60,
+    )
+    r.raise_for_status()
+    data = r.json()
+    content = (data.get("message") or {}).get("content", "")
+    return content.strip() if isinstance(content, str) else str(content)
+
 @api_router.post("/categorize/suggest")
 async def suggest_category(payload: SuggestRequest):
     cats = await db.categories.find({"project_id": payload.project_id}, {"_id": 0}).to_list(500)
@@ -634,8 +777,13 @@ async def suggest_category(payload: SuggestRequest):
     candidates = [c for c in cats if c.get("type") == expected_type] or cats
     cat_list = "\n".join([f"- {c['name']}" for c in candidates])
 
-    if not EMERGENT_LLM_KEY:
-        return {"suggested_category_id": None, "suggested_name": None, "reason": "LLM not configured."}
+    settings = await _get_settings()
+    provider = settings.ai_provider
+
+    if provider == "none":
+        return {"suggested_category_id": None, "suggested_name": None, "reason": "AI suggestions disabled in Settings."}
+    if provider == "emergent" and not EMERGENT_LLM_KEY:
+        return {"suggested_category_id": None, "suggested_name": None, "reason": "Emergent LLM key not configured."}
 
     sys_msg = (
         "You are a personal finance assistant. Given a bank transaction description and amount, "
@@ -651,20 +799,15 @@ async def suggest_category(payload: SuggestRequest):
     )
 
     try:
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"cat-{uuid.uuid4()}",
-            system_message=sys_msg,
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        resp = await chat.send_message(UserMessage(text=user_text))
-        text = resp.strip() if isinstance(resp, str) else str(resp)
-        # extract JSON
+        if provider == "ollama":
+            text = _suggest_via_ollama(sys_msg, user_text, settings.ollama_url, settings.ollama_model)
+        else:
+            text = await _suggest_via_emergent(sys_msg, user_text)
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             parsed = json.loads(match.group(0))
             name = parsed.get("category_name", "").strip()
             reason = parsed.get("reason", "")
-            # strip trailing parenthesized type if model added it
             clean = re.sub(r'\s*\([^)]*\)\s*$', '', name).strip()
             for c in candidates:
                 if c["name"].lower() == clean.lower() or c["name"].lower() == name.lower():
@@ -672,11 +815,16 @@ async def suggest_category(payload: SuggestRequest):
                         "suggested_category_id": c["id"],
                         "suggested_name": c["name"],
                         "reason": reason,
+                        "provider": provider,
                     }
-        return {"suggested_category_id": None, "suggested_name": None, "reason": text[:200]}
+        return {"suggested_category_id": None, "suggested_name": None, "reason": (text or "")[:200], "provider": provider}
     except Exception as e:
-        logging.exception("LLM suggest failed")
-        return {"suggested_category_id": None, "suggested_name": None, "reason": f"AI error: {str(e)[:120]}"}
+        logging.exception("LLM suggest failed (%s)", provider)
+        msg = str(e)
+        # Friendly message for the most common Ollama error: model not pulled.
+        if provider == "ollama" and ("model" in msg.lower() and ("not found" in msg.lower() or "pull" in msg.lower())):
+            msg = f"Ollama model '{settings.ollama_model}' not installed. Run `ollama pull {settings.ollama_model}` and try again."
+        return {"suggested_category_id": None, "suggested_name": None, "reason": f"AI error: {msg[:200]}", "provider": provider}
 
 # ----- Analytics -----
 @api_router.get("/analytics/yearly")

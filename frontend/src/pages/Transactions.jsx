@@ -10,7 +10,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuLabel, DropdownMenuSeparator,
 } from "../components/ui/dropdown-menu";
-import { Tag, Search, Trash2, Sparkles, Upload as UploadIcon, Download, Wand2, X } from "lucide-react";
+import { Tag, Search, Trash2, Sparkles, Upload as UploadIcon, Download, Wand2, X, RefreshCw } from "lucide-react";
 import CategorizeDialog from "../components/CategorizeDialog";
 import { toast } from "sonner";
 
@@ -115,6 +115,20 @@ export default function Transactions() {
     window.open(url, "_blank");
   };
 
+  const reclassify = async () => {
+    try {
+      const res = await api.post(`/transactions/reclassify?project_id=${active.id}`);
+      if (res.data.fixed > 0) {
+        toast.success(`Re-classified ${res.data.fixed} of ${res.data.checked} transactions`);
+      } else {
+        toast.success(`All ${res.data.checked} transactions already correctly classified`);
+      }
+      load();
+    } catch {
+      toast.error("Reclassify failed");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4 flex-wrap">
@@ -124,14 +138,25 @@ export default function Transactions() {
             Transactions
           </h1>
         </div>
-        <Button
-          onClick={exportCSV}
-          variant="outline"
-          data-testid="export-csv-btn"
-          className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
-        >
-          <Download className="w-4 h-4 mr-2" /> Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={reclassify}
+            variant="outline"
+            data-testid="reclassify-btn"
+            className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
+            title="Recompute income/expense type from each transaction's amount sign"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" /> Re-classify
+          </Button>
+          <Button
+            onClick={exportCSV}
+            variant="outline"
+            data-testid="export-csv-btn"
+            className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
+          >
+            <Download className="w-4 h-4 mr-2" /> Export CSV
+          </Button>
+        </div>
       </div>
 
       <Card className="p-4 bg-white border-[#EAE3D9] shadow-none">

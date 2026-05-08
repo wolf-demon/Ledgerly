@@ -14,6 +14,7 @@ import Categories from "./pages/Categories";
 import Upload from "./pages/Upload";
 import Reports from "./pages/Reports";
 import Recurring from "./pages/Recurring";
+import Settings from "./pages/Settings";
 
 // In Electron the app is served via the file:// protocol, where BrowserRouter's
 // HTML5 history API breaks. Switch to HashRouter automatically in that case.
@@ -40,6 +41,7 @@ function Shell() {
         <Route path="/reports" element={<Reports />} />
         <Route path="/recurring" element={<Recurring />} />
         <Route path="/upload" element={<Upload />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
       <NewProjectDialog open={open} onOpenChange={setOpen} onCreated={handleCreated} />
     </Layout>
