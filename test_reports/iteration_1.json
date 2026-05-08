@@ -1,0 +1,32 @@
+{
+  "summary": "Comprehensive backend + frontend testing of Ledgerly. All 15 backend pytest cases passed (projects, categories, CSV upload incl. Debit/Credit variant, dedupe, filters, rules apply_to_similar with back-application, auto-categorize on subsequent upload via rule, AI suggest using EMERGENT_LLM_KEY/Claude Sonnet 4.5, analytics yearly/category/years). Frontend e2e flow via Playwright passed: new-project dialog, project switcher, sidebar nav, Upload CSV with toast (4 inserted/0 skipped), Transactions table renders TESCO/NETFLIX/SALARY rows, Categories page shows seeded 9 default cats, Dashboard renders cashflow bar chart with data, Yearly Report renders, Categorize dialog opens with AI Suggest returning 'Groceries' for TESCO with reason text, Save button enabled, project deletion via dropdown menu works. PDF parsing path was not exercised (no sample PDF) but code path is exercised via /api/transactions/upload routing and CSV branch.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Yearly Report", "issues": ["When all transactions are uncategorized, the heatmap shows 'No expense data for 2025' even though Total Expense card shows £73.94. The /api/analytics/yearly response includes an 'Uncategorized' bucket but the Reports page appears to filter/hide it in the category heatmap. Consider rendering Uncategorized rows so users can drill into them."]},
+      {"screen": "Dashboard", "issues": ["Recharts console warning: 'The width(-1) and height(-1) of chart should be greater than 0' on initial render of the Expense Pie chart when no expense category data exists. Functionally fine but noisy in console. Consider conditional render or fixed minHeight."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_ledgerly.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "(Optional, design polish) Render an 'Uncategorized' row in the Yearly Report heatmap when uncategorized transactions exist for the selected year, instead of 'No expense data'.",
+    "(Optional, console hygiene) Guard the Recharts ResponsiveContainer to suppress width(-1)/height(-1) warning when no data."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~640 lines and mixes models, helpers, parsers and routes. Consider splitting into modules (models.py, parsers.py, routers/projects.py, routers/transactions.py, routers/analytics.py) before file grows further (>700 lines threshold).",
+    "list_transactions uses 'q[\"category_id\"] = None' to filter uncategorized — works but does not match documents missing the field. All inserts include the field so OK currently; consider {'$in': [None]} or {'$exists': false} for robustness.",
+    "PUT /transactions/{id}: when apply_to_similar=True and category_id is provided, code only updates 'if t.get(category_id) != payload.category_id'. Counts could under-report when category_id passed equals existing. Acceptable but document.",
+    "delete_category does not delete transactions, only nulls category_id (correct per spec). Good.",
+    "AI suggest: has fallback when LLM key missing (returns None). Good. Reason field surfaced to UI.",
+    "All endpoints exclude _id projection ({'_id': 0}). Good.",
+    "Pydantic v2 ConfigDict(extra='ignore') used — good for forward-compat."
+  ],
+  "updated_files": ["/app/backend/tests/test_ledgerly.py (new)"],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% of critical flows tested"},
+  "seed_data_creation": "Created and deleted TEST_-prefixed projects during pytest. Frontend test created and cleaned up TEST_UIProject via UI flow.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite at /app/backend/tests/test_ledgerly.py is reusable; run with: pytest /app/backend/tests/test_ledgerly.py -v --junitxml=/app/test_reports/pytest/pytest_results.xml. PDF upload path not exercised — provide a sample PDF for parse_pdf coverage. data-testids used on UI: header-new-project-btn, new-project-name-input, submit-new-project-btn, project-switcher, delete-project-menu, nav-{label}, file-input, choose-file-btn, upload-result, categorize-btn-{id}, ai-suggest-btn, save-categorize-btn."
+}
