@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useProject } from "../lib/projectContext";
+import { useConfirm } from "../components/ConfirmDialog";
 import api from "../lib/api";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -13,6 +14,7 @@ const PALETTE = ["#364C2E", "#4B6B40", "#728A66", "#D96C4E", "#D1A77E", "#E3C8AA
 
 export default function Categories() {
   const { active } = useProject();
+  const confirm = useConfirm();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -63,7 +65,11 @@ export default function Categories() {
   };
 
   const remove = async (c) => {
-    if (!window.confirm(`Delete category "${c.name}"? Transactions will become uncategorized.`)) return;
+    const ok = await confirm({
+      title: `Delete category "${c.name}"?`,
+      body: "Transactions assigned to this category will become uncategorized. This cannot be undone.",
+    });
+    if (!ok) return;
     await api.delete(`/categories/${c.id}`);
     toast.success("Deleted");
     load();

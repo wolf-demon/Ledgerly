@@ -80,9 +80,29 @@ N/A (no auth)
 - `desktop/package.json` ships frontend/backend via `extraResources` (cleaner than `files` paths)
 - `desktop/main.js` writes `<userData>/ledgerly.log`, opens DevTools when `LEDGERLY_DEBUG=1`, shows OS dialog on fatal errors
 
+### Iteration 8 (2026-02-08) — Backend modular refactor + desktop auto-update
+- **server.py refactor**: 1410 lines → 65 lines. Split into:
+  - `app_db.py` — storage backend selection + lifecycle hooks
+  - `models.py` — all Pydantic models in one place
+  - `services/helpers.py` — `normalize_merchant`, `parse_amount`, `parse_date`, `find_column`, `apply_rules`, **new `force_amount_sign(amount, cat_type)` helper** (replaces 5 copies of the sign-flipping logic across update_transaction, bulk_categorize, bulk_suggest, reclassify, apply_to_similar)
+  - `services/parsers.py` — CSV/TSV/PDF/Excel/ODS/OFX + Google Sheets URL helpers
+  - `services/ai.py` — Emergent + Ollama LLM calls
+  - `services/settings_store.py` — get/save settings
+  - `routes/{projects,categories,transactions,settings,analytics,categorize}.py` — one APIRouter per domain
+  - `server.py` — app + middleware + router includes only
+- Backward-compat re-exports in `server.py` (so existing test imports `from server import parse_csv` still work).
+- Result: **67/68 tests passing** (same as before refactor — zero regressions; 1 skip is xlrd missing).
+
+- **Auto-update channel for desktop binaries** via `electron-updater@6.x`:
+  - New `desktop/updater.js` — wires startup check (4s after launch), 6-hourly checks, dialog on update available, restart/later prompt on download.
+  - **Help → Check for Updates…** menu entry on Win/Linux/macOS.
+  - `desktop/package.json` adds `publish:{win,mac,linux,all}` scripts and a GitHub Releases publish target controlled by `LEDGERLY_GH_OWNER` + `LEDGERLY_GH_REPO` env vars at publish time.
+  - NSIS `differentialPackage: true` so users only download the changed bytes between versions.
+  - Mac targets `dmg` + `zip` (zip is what electron-updater installs from on macOS).
+  - Runtime overrides: `LEDGERLY_UPDATE_FEED` (custom feed URL) and `LEDGERLY_UPDATE_CHANNEL` (beta/alpha channels).
+  - `desktop/README.md` — full new section covering GitHub Releases publishing, custom feeds, pre-release channels, code-signing requirements.
+
 ## Backlog
-- P1: Refactor server.py (~860 lines) into routers/ subpackage when convenient
 - P1: Bank-specific PDF parser overrides (Lloyds, Monzo, Starling)
 - P2: Budget targets per category with progress bars
 - P2: PRAGMA integrity_check on startup with WAL-orphan warning
-- P2: Auto-update channel for desktop binaries

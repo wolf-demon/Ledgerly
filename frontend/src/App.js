@@ -4,6 +4,7 @@ import "@/index.css";
 import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { ProjectProvider } from "./lib/projectContext";
+import { ConfirmProvider } from "./components/ConfirmDialog";
 import Layout from "./components/Layout";
 import NewProjectDialog from "./components/NewProjectDialog";
 import { useProject } from "./lib/projectContext";
@@ -53,17 +54,19 @@ function App() {
     <div className="App">
       <Router>
         <ProjectProvider>
-          <Shell />
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              style: {
-                background: "#FFFFFF",
-                border: "1px solid #EAE3D9",
-                color: "#1F2E1B",
-              },
-            }}
-          />
+          <ConfirmProvider>
+            <Shell />
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                style: {
+                  background: "#FFFFFF",
+                  border: "1px solid #EAE3D9",
+                  color: "#1F2E1B",
+                },
+              }}
+            />
+          </ConfirmProvider>
         </ProjectProvider>
       </Router>
     </div>

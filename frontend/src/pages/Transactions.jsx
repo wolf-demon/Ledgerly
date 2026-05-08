@@ -12,10 +12,12 @@ import {
 } from "../components/ui/dropdown-menu";
 import { Tag, Search, Trash2, Sparkles, Upload as UploadIcon, Download, Wand2, X, RefreshCw, Bot, Loader2 } from "lucide-react";
 import CategorizeDialog from "../components/CategorizeDialog";
+import { useConfirm } from "../components/ConfirmDialog";
 import { toast } from "sonner";
 
 export default function Transactions() {
   const { active } = useProject();
+  const confirm = useConfirm();
   const [params] = useSearchParams();
   const initialFilter = params.get("filter") || "all";
 
@@ -79,7 +81,7 @@ export default function Transactions() {
   };
 
   const remove = async (id) => {
-    if (!window.confirm("Delete this transaction?")) return;
+    if (!(await confirm({ title: "Delete this transaction?", body: "This cannot be undone." }))) return;
     await api.delete(`/transactions/${id}`);
     toast.success("Deleted");
     load();
@@ -105,7 +107,10 @@ export default function Transactions() {
 
   const bulkDelete = async () => {
     if (selected.size === 0) return;
-    if (!window.confirm(`Delete ${selected.size} selected transactions?`)) return;
+    if (!(await confirm({
+      title: `Delete ${selected.size} selected transactions?`,
+      body: "This cannot be undone.",
+    }))) return;
     await Promise.all(Array.from(selected).map((id) => api.delete(`/transactions/${id}`)));
     toast.success(`Deleted ${selected.size} transactions`);
     load();
@@ -132,11 +137,16 @@ export default function Transactions() {
 
   const autoCategorize = async () => {
     const uncategorized = transactions.filter((t) => !t.category_id).length;
-    if (!window.confirm(
-      `Run AI over ${uncategorized} uncategorized transactions? ` +
-      `This may create new categories if none of the existing ones fit. ` +
-      `Make sure your AI provider is configured in Settings.`
-    )) return;
+    if (uncategorized === 0) {
+      toast.success("Nothing to categorize 🎉");
+      return;
+    }
+    if (!(await confirm({
+      title: `Auto-categorize ${uncategorized} transactions with AI?`,
+      body: "This may create new categories if none of the existing ones fit. Make sure your AI provider is configured in Settings.",
+      confirmLabel: "Run AI",
+      destructive: false,
+    }))) return;
     setAutoBusy(true);
     try {
       const res = await api.post("/transactions/bulk-suggest", {

@@ -199,15 +199,25 @@ app.whenReady().then(async () => {
   log("loading window:", loadTarget);
   createWindow(loadTarget);
 
+  // Kick off auto-update checks (no-op in dev/unpackaged builds).
+  const updaterHandle = updater.init({
+    getWindow: () => mainWindow,
+    logger: { log },
+  });
+
   if (process.platform === "darwin") {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { role: "appMenu" },
       { role: "editMenu" },
       { role: "viewMenu" },
       { role: "windowMenu" },
+      { label: "Help", submenu: [updaterHandle.helpMenuItem()] },
     ]));
   } else {
-    Menu.setApplicationMenu(null);
+    // Lightweight menu just for the update entry on Windows / Linux.
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      { label: "Help", submenu: [updaterHandle.helpMenuItem()] },
+    ]));
   }
 
   app.on("activate", () => {

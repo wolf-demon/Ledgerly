@@ -89,6 +89,73 @@ Quit Ledgerly, then delete `%APPDATA%\Ledgerly\ledgerly.db` (Windows) or `~/Libr
 ```
 or simply delete `desktop/.cache/` and `desktop/python-runtime/` and rebuild.
 
+## Auto-update channel
+
+Ledgerly ships with [`electron-updater`](https://www.electron.build/auto-update). Once an
+installed copy is launched, it:
+
+1. Waits ~4 seconds for the local backend + UI to come up.
+2. Hits the publish target configured at build time and compares versions.
+3. Downloads the new installer **in the background**, then asks the user to
+   restart now or apply on next quit.
+4. Repeats the check every 6 hours while the app is running.
+5. **Help → Check for Updates…** menu also runs the check on demand.
+
+Differential updates (NSIS `differentialPackage`) are enabled, so users only
+download the changed bytes between versions.
+
+### Default publish target — GitHub Releases
+
+Set two env vars before running the publish script and `electron-builder` will
+upload the artifacts (`*.exe`, `*.dmg`, `*.zip`, `*.AppImage`) plus the
+`latest*.yml` manifests to a draft release for the matching tag:
+
+```bash
+export LEDGERLY_GH_OWNER=your-github-username-or-org
+export LEDGERLY_GH_REPO=ledgerly
+export GH_TOKEN=ghp_xxx_with_repo_scope     # personal access token
+cd desktop
+yarn publish:win        # or publish:mac / publish:linux / publish:all
+```
+
+`GH_TOKEN` is what `electron-builder` uses to upload. Promote the draft to a
+published release and every installed Ledgerly will pick it up on its next
+update check.
+
+### Custom feed (S3, your own server, etc.)
+
+Override the feed at runtime — the installed app will pull `latest*.yml`
+from this URL instead of GitHub:
+
+```bash
+LEDGERLY_UPDATE_FEED=https://updates.example.com/ledgerly/  Ledgerly.exe
+```
+
+For a permanent custom target, change the `build.publish` block in
+`desktop/package.json` (e.g. `provider: "s3"` or `"generic"`). See
+https://www.electron.build/configuration/publish for all providers.
+
+### Pre-release channels
+
+Ship beta builds by tagging a pre-release version (`1.2.0-beta.1`) **and**
+launching with the matching channel env var so the updater knows it should
+look at pre-releases:
+
+```bash
+LEDGERLY_UPDATE_CHANNEL=beta   Ledgerly.exe
+```
+
+### Code-signing & notarization
+
+Auto-update *works* with unsigned builds (Windows + Linux), but macOS will
+refuse to install an unsigned `.dmg` silently — users need to dismiss
+Gatekeeper warnings each time. For a smooth UX:
+- **Windows**: provide an EV/OV codesign certificate via `CSC_LINK` +
+  `CSC_KEY_PASSWORD` env vars.
+- **macOS**: configure `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `CSC_LINK`,
+  `CSC_KEY_PASSWORD` so `electron-builder` notarizes the `.dmg` and `.zip`.
+  The `.zip` is what `electron-updater` actually installs from on macOS.
+
 ## Develop locally (hot reload)
 
 ```bash

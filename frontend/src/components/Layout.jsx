@@ -2,6 +2,7 @@ import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Receipt, Tags, Upload, BarChart3, Wallet, Plus, ChevronDown, Trash2, Repeat, Settings as SettingsIcon } from "lucide-react";
 import { useProject } from "../lib/projectContext";
+import { useConfirm } from "./ConfirmDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,10 +28,16 @@ const navItems = [
 export default function Layout({ children, onNewProject }) {
   const { projects, active, setActiveId, reload } = useProject();
   const navigate = useNavigate();
+  const confirm = useConfirm();
 
   const handleDelete = async () => {
     if (!active) return;
-    if (!window.confirm(`Delete project "${active.name}"? This removes all transactions, categories, and rules.`)) return;
+    const ok = await confirm({
+      title: `Delete project "${active.name}"?`,
+      body: "This permanently removes all transactions, categories and rules in this project. This cannot be undone.",
+      confirmLabel: "Delete project",
+    });
+    if (!ok) return;
     try {
       await api.delete(`/projects/${active.id}`);
       toast.success("Project deleted");
