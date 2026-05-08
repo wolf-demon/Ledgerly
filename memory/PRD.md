@@ -37,6 +37,17 @@ N/A (no auth)
 - `/app/test_reports/iteration_2.json` — 11/11 new backend, 100% new frontend
 - `/app/test_reports/iteration_3.json` — 26/26 regression on SQLite, 100% smoke
 
+### Iteration 5 (2026-02-08) — More file formats
+- **Excel** (`.xlsx` via openpyxl, `.xls` via xlrd) — first sheet with Date/Description/Amount cols is auto-detected
+- **OpenDocument Spreadsheet** (`.ods`) — LibreOffice / Apple Numbers exports
+- **TSV** (tab-separated)
+- **OFX / QFX** (Open Financial Exchange — most banks export this)
+- **Google Sheets via public share URL** — backend transforms any `/spreadsheets/d/{ID}/edit...` URL into the CSV export URL, fetches and ingests; helpful "Anyone with the link" hint when the sheet is private
+- **Generic public CSV/Excel URL** — same endpoint accepts any reachable file URL
+- New `POST /api/transactions/import-url` endpoint, `parse_any` dispatcher, `google_sheet_to_csv_url` helper
+- Upload page now has tabs: "Upload file" + "Google Sheets / URL" with paste-box + step-by-step help
+- Tests: **16/16 new + 26/26 regression = 42/42 passing**
+
 ### Iteration 4 (2026-02-08) — Bundled Python runtime
 - Desktop installer now bundles a complete CPython 3.12.13 runtime via [python-build-standalone](https://github.com/astral-sh/python-build-standalone)
 - New `desktop/scripts/download-python.{ps1,sh}` — downloads target-platform tarball, pip-installs `requirements-desktop.txt` into it, trims dev tools / unused SDKs
