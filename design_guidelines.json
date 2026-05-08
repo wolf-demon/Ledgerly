@@ -1,0 +1,118 @@
+{
+  "theme": "LIGHT",
+  "archetype": "1 (Organic & Earthy)",
+  "vibe": "Trust, Calm, Grounded, Organized, Tactile",
+  "domain": "Personal Finance SaaS / Dashboard",
+  "colors": {
+    "background": "#FDFBF7",
+    "foreground": "#1F2E1B",
+    "primary": "#364C2E",
+    "primary_hover": "#22331D",
+    "primary_foreground": "#FFFFFF",
+    "secondary": "#F4EBE1",
+    "secondary_foreground": "#364C2E",
+    "secondary_hover": "#EAE3D9",
+    "card": "#FFFFFF",
+    "card_foreground": "#1F2E1B",
+    "muted": "#F4EBE1",
+    "muted_foreground": "#656C5A",
+    "border": "#EAE3D9",
+    "input": "#EAE3D9",
+    "ring": "#364C2E",
+    "income_accent": "#4B6B40",
+    "income_bg": "rgba(75, 107, 64, 0.1)",
+    "expense_accent": "#D96C4E",
+    "expense_bg": "rgba(217, 108, 78, 0.1)",
+    "chart_colors": ["#364C2E", "#D96C4E", "#D1A77E", "#728A66", "#E3C8AA"]
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Work Sans",
+      "body": "IBM Plex Sans",
+      "import_url": "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=Work+Sans:wght@300;400;500;600;700&display=swap');"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-semibold tracking-tight leading-tight",
+      "h2": "text-2xl sm:text-3xl font-medium tracking-tight",
+      "h3": "text-xl sm:text-2xl font-medium tracking-tight",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-base leading-relaxed text-[#1F2E1B]",
+      "small": "text-sm text-[#656C5A]",
+      "overline": "text-xs uppercase tracking-[0.2em] text-[#656C5A] font-semibold"
+    }
+  },
+  "layout_and_spacing": {
+    "scale": "Generous spacing. Use p-6 or p-8 for inner card padding.",
+    "dashboard_grid": {
+      "mode": "Control Room Grid",
+      "container": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+      "summary_cards": "col-span-1",
+      "primary_data_chart": "col-span-1 lg:col-span-3 lg:row-span-2",
+      "feed_list": "col-span-1 lg:col-span-1 lg:row-span-2"
+    },
+    "navigation": "Sidebar navigation (w-64) with a fixed top header (h-16) for project/account selection. The rest is scrollable main content with pt-6 pb-24 px-8."
+  },
+  "components": {
+    "cards": {
+      "base": "bg-white border border-[#EAE3D9] rounded-md shadow-none",
+      "hover": "hover:-translate-y-1 hover:shadow-md hover:border-[#D1A77E] transition-all duration-300 ease-out",
+      "internal_padding": "p-6 sm:p-8"
+    },
+    "buttons": {
+      "primary": "bg-[#364C2E] hover:bg-[#22331D] text-white rounded-md font-medium px-6 py-2 transition-colors",
+      "secondary": "bg-[#F4EBE1] hover:bg-[#EAE3D9] text-[#364C2E] border border-transparent rounded-md font-medium px-6 py-2 transition-colors",
+      "outline": "border border-[#EAE3D9] bg-transparent hover:bg-[#F4EBE1] text-[#1F2E1B] rounded-md font-medium px-6 py-2 transition-colors"
+    },
+    "inputs": {
+      "base": "bg-white border border-[#EAE3D9] rounded-md focus:ring-2 focus:ring-[#364C2E]/20 focus:border-[#364C2E] px-4 py-2 text-[#1F2E1B]"
+    },
+    "tables": {
+      "base": "w-full text-left text-sm",
+      "header": "text-[#656C5A] font-medium border-b border-[#EAE3D9] pb-3",
+      "row": "border-b border-[#EAE3D9]/50 hover:bg-[#F4EBE1]/30 transition-colors",
+      "cell": "py-4"
+    },
+    "badges": {
+      "income": "bg-[#4B6B40]/10 text-[#4B6B40] px-2.5 py-0.5 rounded text-xs font-semibold",
+      "expense": "bg-[#D96C4E]/10 text-[#D96C4E] px-2.5 py-0.5 rounded text-xs font-semibold",
+      "neutral": "bg-[#F4EBE1] text-[#656C5A] px-2.5 py-0.5 rounded text-xs font-semibold"
+    }
+  },
+  "interactions_and_motion": {
+    "default_transition": "transition-all duration-300 ease-out",
+    "hover_states": "All interactive elements MUST have visible hover states with appropriate contrast.",
+    "focus_states": "focus:outline-none focus:ring-2 focus:ring-[#364C2E] focus:ring-offset-2 focus:ring-offset-[#FDFBF7]",
+    "staggered_entrance": "Use framer-motion to stagger list items and dashboard cards on initial load."
+  },
+  "media_and_assets": {
+    "icons_library": "lucide-react",
+    "images": [
+      {
+        "category": "empty_state",
+        "url": "https://static.prod-images.emergentagent.com/jobs/7917e94f-3fa5-4b2d-9968-bd088df4be3d/images/c1f3dedb00db4fbc24cbee4698f766c1b405b56d94ddbedd041b3e857cc70fea.png",
+        "description": "Minimalist vintage wooden desk tray for 'No statements uploaded yet' or 'No transactions found' empty states."
+      },
+      {
+        "category": "login_hero",
+        "url": "https://static.prod-images.emergentagent.com/jobs/7917e94f-3fa5-4b2d-9968-bd088df4be3d/images/6fc0c6379b67e3da3e56139abf71ec1b4913f462de6fcc84fc48405b1ebe32f6.png",
+        "description": "Serene minimalist desk setup for the split-screen login/signup page side banner."
+      }
+    ]
+  },
+  "accessibility": {
+    "contrast": "Ensure minimum 4.5:1 for standard text and 3:1 for large text against background. Use #1F2E1B for text on light backgrounds.",
+    "testing_attributes": "All interactive elements MUST include data-testid attribute (e.g., data-testid='upload-statement-btn')."
+  },
+  "instructions_to_main_agent": [
+    "Use Tailwind CSS configured with the exact hex codes provided in this JSON.",
+    "Implement the 'Control Room' grid layout for the main dashboard (4-column grid).",
+    "Add 'Work Sans' and 'IBM Plex Sans' fonts to your global CSS and extend Tailwind config to use them for sans and body classes respectively.",
+    "Do NOT use pure #000000 or #FFFFFF without context. Cards are #FFFFFF, background is #FDFBF7.",
+    "Implement file upload (CSV/PDF) using Shadcn components (Dialog, Input) styled with the Organic & Earthy theme.",
+    "For charts (Yearly Overview), use Recharts or Shadcn Charts. Use the custom colors defined in 'chart_colors'.",
+    "Categorization CRUD must be housed in a clean table or bento-grid list. Use badges for income/expense labels.",
+    "Apply Framer Motion for subtle entry animations on dashboard cards.",
+    "Ensure the sidebar navigation supports selecting different 'projects' or 'accounts' via a top dropdown.",
+    "Remember to include data-testid on critical elements like login form, upload button, category select dropdowns, etc."
+  ]
+}
