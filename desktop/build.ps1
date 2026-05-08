@@ -20,8 +20,7 @@ param(
     [ValidateSet("win", "mac", "linux", "all", "current")]
     [string]$Targets = "current",
 
-    [switch]$SkipFrontend,
-    [switch]$Verbose
+    [switch]$SkipFrontend
 )
 
 $ErrorActionPreference = "Stop"
