@@ -16,6 +16,7 @@ ledgerly/
 cd backend
 pip install -r requirements.txt
 python -m uvicorn server:app --reload --port 8001
+# Defaults to SQLite (writes ./ledgerly.db). Set STORAGE=mongo + MONGO_URL to use MongoDB instead.
 
 # 2. Frontend
 cd ../frontend
@@ -27,18 +28,23 @@ The frontend reads `REACT_APP_BACKEND_URL` from `frontend/.env`.
 
 ## Build a native Windows / macOS desktop app
 
-See **`desktop/README.md`** for full instructions. Summary:
+The desktop build does **not** require MongoDB — it bundles a SQLite-backed FastAPI inside Electron.
 
-```bash
+```powershell
+# Windows
 cd desktop
-yarn install
-yarn build:frontend           # builds React with localhost backend URL
-yarn dist:win                 # on Windows -> .exe installer
-yarn dist:mac                 # on macOS   -> .dmg
-yarn dist:linux               # on Linux   -> AppImage
+.\build.ps1                    # builds for the current OS
+.\build.ps1 -Targets all       # everything this machine can produce
 ```
 
-Binaries are written to `desktop/dist/`. To build all three targets at once, use the included GitHub Actions workflow (see `desktop/README.md`).
+```bash
+# macOS / Linux
+cd desktop
+./build.sh                     # current OS
+./build.sh all                 # everything this machine can produce
+```
+
+Binaries land in `desktop/dist/`. See `desktop/README.md` for the cross-compilation table and full details. To produce **signed** binaries for all three OSes from a single tag push, use the included GitHub Actions workflow at `.github/workflows/desktop-build.yml`.
 
 ## Features
 

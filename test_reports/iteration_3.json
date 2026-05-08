@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 3 regression: Mongo->SQLite storage swap. Ran full pytest suite (26 tests across test_ledgerly.py + test_iteration2.py) against SQLite backend - 26/26 passed. UI smoke verified project create -> default categories seeded -> dashboard charts -> yearly report -> nav across Transactions/Categories/Recurring works with SQLite-backed API. Backend supervisor logs show no Motor/MongoDB import errors at startup. SQLite DB file is auto-created on first connection at SQLITE_PATH (/app/backend/ledgerly.db) and persists writes correctly. Edge-case wrappers ($regex date prefix for year filter, $in for bulk-categorize, None for uncategorized=true, aggregate pipeline for /api/analytics/years) all exercised by passing pytest suite + manual UI navigation.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_ledgerly.py",
+    "/app/backend/tests/test_iteration2.py",
+    "/app/test_reports/pytest/iteration_3.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "sqlite_db.py wrapper duck-types Motor's Collection/AsyncIOMotorClient API surface used by server.py - clean pluggable abstraction. STORAGE env var selection is in server.py top-level which is good.",
+    "WAL mode is in use; observed during testing that if /app/backend/ledgerly.db is deleted while uvicorn holds an open file handle, SQLite continues to operate via the open fd but the on-disk file is gone - on next backend restart the WAL is orphaned and the DB starts empty. Consider documenting that ops should not delete *.db without restarting backend, or add a startup integrity check (PRAGMA integrity_check / quick_check) and warn if WAL exists without main DB. Not a regression bug - operator-only edge case.",
+    "Double-storage configured in /app/backend/.env: MONGO_URL + DB_NAME are still set alongside STORAGE=sqlite/SQLITE_PATH. Fine because STORAGE gates which client is instantiated, but worth a comment that Mongo vars are now optional/legacy in sqlite mode.",
+    "/app/desktop/build.ps1 and build.sh not executed in this Linux container per request (require Windows/Mac+Electron runtime)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (26/26 pytest)", "frontend": "100% smoke (project create, categories seeded, dashboard, yearly report, transactions, categories nav)"},
+  "test_credentials": "n/a - no auth in app",
+  "seed_data_creation": "Created 1 UI smoke project (UI_Smoke_Iter3) which was deleted at end of test. SQLite DB file at /app/backend/ledgerly.db created cleanly on backend restart.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend uses SQLite via /app/backend/sqlite_db.py (Motor-compatible wrapper). To run regression: cd /app/backend && export REACT_APP_BACKEND_URL=https://statement-analyzer-35.preview.emergentagent.com && pytest tests/ -q. test_iteration2.py uses os.environ['REACT_APP_BACKEND_URL'] so the env var MUST be exported (no default). All 26 tests pass in ~9-45s depending on AI suggest cache state. Default categories are seeded on POST /api/projects. To test STORAGE=mongo path (optional), set STORAGE=mongo in backend/.env, restart backend, re-run iteration_1 tests."
+}

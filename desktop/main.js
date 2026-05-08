@@ -32,13 +32,26 @@ function startBackend() {
     return;
   }
 
+  // Persist SQLite db in user data dir so installs don't clobber each other.
+  const userData = app.getPath("userData");
+  const sqlitePath = path.join(userData, "ledgerly.db");
+
   const python = resolvePython();
   console.log("[ledgerly] starting backend:", python, "in", backendDir);
+  console.log("[ledgerly] sqlite db at:", sqlitePath);
 
   backendProcess = spawn(
     python,
     ["-m", "uvicorn", "server:app", "--host", "127.0.0.1", "--port", String(BACKEND_PORT)],
-    { cwd: backendDir, env: { ...process.env, PYTHONUNBUFFERED: "1" } }
+    {
+      cwd: backendDir,
+      env: {
+        ...process.env,
+        PYTHONUNBUFFERED: "1",
+        STORAGE: "sqlite",
+        SQLITE_PATH: sqlitePath,
+      },
+    }
   );
 
   backendProcess.stdout.on("data", (d) => process.stdout.write(`[backend] ${d}`));

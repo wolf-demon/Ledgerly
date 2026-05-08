@@ -1,11 +1,11 @@
 # Ledgerly Desktop (Electron)
 
-This folder turns the Ledgerly web app into a standalone desktop application for **Windows** and **macOS**.
+This folder turns the Ledgerly web app into a standalone desktop application for **Windows** and **macOS** — **no database server required**. Data is stored in a single local SQLite file (`ledgerly.db`) inside the user's app-data directory.
 
 ## Architecture
 - The Electron main process (`main.js`) starts the **FastAPI backend** on `127.0.0.1:8001` as a child process.
 - It then loads the built **React frontend** (from `../frontend/build`) inside an Electron window.
-- All app data is stored in **MongoDB** running on the user's machine.
+- All app data is stored in a **local SQLite file**. No MongoDB, no external services.
 
 ## Prerequisites (one-time, on each developer's machine)
 
@@ -13,87 +13,70 @@ This folder turns the Ledgerly web app into a standalone desktop application for
 |-----------|--------------------------------------|---------|
 | Node.js 20+ | Electron + frontend build           | https://nodejs.org |
 | Yarn      | Package manager                      | `npm i -g yarn` |
-| Python 3.11+ | Runs FastAPI backend              | https://python.org |
-| MongoDB Community 7+ | Persistent storage         | https://www.mongodb.com/try/download/community |
+| Python 3.11+ | Runs FastAPI backend              | https://python.org (must be on PATH) |
 
-After installing MongoDB, make sure it is running locally on `mongodb://localhost:27017`.
+That's it — **MongoDB is no longer required**.
 
-Install Python deps **once**:
-```bash
-cd ../backend
-pip install -r requirements.txt
+## One-command build
+
+### From Windows (PowerShell)
+```powershell
+cd desktop
+.\build.ps1                    # builds for current OS
+.\build.ps1 -Targets win       # explicit Windows .exe installer
+.\build.ps1 -Targets all       # everything this machine can produce
 ```
 
-## Build the desktop app
-
+### From macOS / Linux (bash)
 ```bash
-# from /desktop
-yarn install                  # installs Electron + electron-builder
-yarn build:frontend           # produces ../frontend/build with REACT_APP_BACKEND_URL=http://127.0.0.1:8001
-
-# Build for the platform you are currently on:
-yarn dist:win                 # Windows .exe (NSIS installer)  — must be run on Windows
-yarn dist:mac                 # macOS .dmg                      — must be run on macOS
-yarn dist:linux               # Linux AppImage
+cd desktop
+./build.sh                     # current OS
+./build.sh mac                 # macOS .dmg
+./build.sh all                 # everything this machine can produce
 ```
 
-Output binaries land in `desktop/dist/`.
+The script:
+1. Checks Node, Yarn, Python are installed.
+2. `pip install`s the backend's Python deps.
+3. Builds the React frontend with `REACT_APP_BACKEND_URL=http://127.0.0.1:8001`.
+4. Runs `yarn install` in `desktop/` and runs the matching `electron-builder` target.
+5. Drops finished installers into `desktop/dist/`.
 
-> **Note**: `electron-builder` cannot cross-compile signed `.exe` from macOS or signed `.dmg` from Windows.
-> Use a real Windows machine for the Windows build and a real Mac for the Mac build, or use GitHub Actions
-> (sample workflow below) to build all targets in CI.
+## Cross-compilation honest disclaimer
+
+| Host    | Can build               | Cannot build (reliably)                    |
+|---------|-------------------------|--------------------------------------------|
+| Windows | `.exe` (signed/unsigned) | Signed Mac `.dmg` (Apple requires macOS for codesign/notarize) |
+| macOS   | `.dmg`, `.exe`, `.AppImage` | Signed Windows `.exe` requires Windows codesign tooling |
+| Linux   | `.exe`, `.AppImage`     | Mac `.dmg` (no Apple toolchain on Linux)   |
+
+For **signed binaries on every platform**, push a tag to your GitHub repo and the included
+`.github/workflows/desktop-build.yml` will produce all three on dedicated runners (Windows, macOS, Ubuntu).
 
 ## Develop locally (hot reload)
 
 ```bash
-# Terminal 1 — start the backend
-cd ../backend
-python -m uvicorn server:app --reload --port 8001
+# Terminal 1 — backend
+cd backend && python -m uvicorn server:app --reload --port 8001
 
-# Terminal 2 — start the React dev server
-cd ../frontend
-REACT_APP_BACKEND_URL=http://127.0.0.1:8001 yarn start
+# Terminal 2 — React dev server
+cd frontend && REACT_APP_BACKEND_URL=http://127.0.0.1:8001 yarn start
 
-# Terminal 3 — start Electron pointing at the dev server
-cd ../desktop
-yarn install
-yarn start
+# Terminal 3 — Electron window pointing at the dev server
+cd desktop && yarn install && yarn start
 ```
 
-## GitHub Actions (build all 3 platforms automatically)
+## Data location
 
-Create `.github/workflows/desktop-build.yml` in your repo:
+After install:
+- **Windows**: `%APPDATA%\Ledgerly\ledgerly.db`
+- **macOS**: `~/Library/Application Support/Ledgerly/ledgerly.db`
+- **Linux**: `~/.config/Ledgerly/ledgerly.db`
 
-```yaml
-name: Build desktop binaries
-on:
-  push:
-    tags: ["v*"]
-jobs:
-  build:
-    strategy:
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: pip install -r backend/requirements.txt
-      - run: cd frontend && yarn install && yarn build
-        env:
-          REACT_APP_BACKEND_URL: http://127.0.0.1:8001
-      - run: cd desktop && yarn install && yarn dist:${{ runner.os == 'macOS' && 'mac' || runner.os == 'Windows' && 'win' || 'linux' }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ledgerly-${{ matrix.os }}
-          path: desktop/dist/*.{exe,dmg,AppImage}
-```
+The path is set via the `SQLITE_PATH` env var that Electron passes to the backend; defaults to a file alongside `server.py` in dev mode.
 
 ## Troubleshooting
 
-- **Backend fails to start**: ensure `python3` is on PATH, or set the env var `LEDGERLY_PYTHON=/full/path/to/python` before launching.
-- **MongoDB connection refused**: ensure `mongod` is running. Verify with `mongosh`.
+- **Backend fails to start**: ensure `python` is on PATH, or set `LEDGERLY_PYTHON=/full/path/to/python` before launching the app.
+- **"AssertionError: SQLITE_PATH"**: delete `ledgerly.db` and restart — it will be recreated.
 - **Stale frontend build**: re-run `yarn build:frontend`.

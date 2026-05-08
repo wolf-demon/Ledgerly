@@ -1,7 +1,6 @@
 from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import io
@@ -19,9 +18,22 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Storage backend selection: SQLite (default for desktop) or MongoDB.
+STORAGE = os.environ.get('STORAGE', 'sqlite').lower()
+
+if STORAGE == 'mongo':
+    from motor.motor_asyncio import AsyncIOMotorClient
+    mongo_url = os.environ['MONGO_URL']
+    _mongo_client = AsyncIOMotorClient(mongo_url)
+    db = _mongo_client[os.environ['DB_NAME']]
+    _sqlite_db = None
+else:
+    from sqlite_db import SQLiteDB
+    _default_path = str(ROOT_DIR / 'ledgerly.db')
+    sqlite_path = os.environ.get('SQLITE_PATH', _default_path)
+    _sqlite_db = SQLiteDB(sqlite_path)
+    db = _sqlite_db
+    _mongo_client = None
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
@@ -853,6 +865,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@app.on_event("startup")
+async def startup_db_client():
+    if _sqlite_db is not None:
+        await _sqlite_db.connect()
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    if _mongo_client is not None:
+        _mongo_client.close()
+    if _sqlite_db is not None:
+        await _sqlite_db.close()
