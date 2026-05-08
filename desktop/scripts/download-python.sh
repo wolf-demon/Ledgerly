@@ -81,8 +81,9 @@ fi
 chmod +x "$PYTHON" 2>/dev/null || true
 
 step "Installing backend requirements into bundled Python"
+EXTRA_INDEX="https://d33sy5i8bnduwe.cloudfront.net/simple/"
 "$PYTHON" -m pip install --upgrade pip --no-warn-script-location
-"$PYTHON" -m pip install --no-warn-script-location -r "$BACKEND_REQS"
+"$PYTHON" -m pip install --no-warn-script-location --extra-index-url "$EXTRA_INDEX" -r "$BACKEND_REQS"
 
 step "Trimming runtime"
 # Standard wheel trimming: pycache, tests, type stubs, build tooling we no longer need.

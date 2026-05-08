@@ -79,8 +79,9 @@ if (-not (Test-Path $PYTHON)) {
 
 # 4. Install backend requirements into the bundled runtime
 Step "Installing backend requirements into bundled Python"
+$ExtraIndex = "https://d33sy5i8bnduwe.cloudfront.net/simple/"
 & $PYTHON -m pip install --upgrade pip --no-warn-script-location | Out-Host
-& $PYTHON -m pip install --no-warn-script-location -r $BackendReqs | Out-Host
+& $PYTHON -m pip install --no-warn-script-location --extra-index-url $ExtraIndex -r $BackendReqs | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 
 # 5. Trim obvious dead weight (caches, tests inside site-packages, .pyc)
