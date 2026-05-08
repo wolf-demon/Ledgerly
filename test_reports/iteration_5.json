@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 5 testing complete. Multi-format upload (CSV/TSV/XLSX/ODS/OFX/QFX + unknown-fallback) and the new POST /api/transactions/import-url endpoint (Google Sheets URL transformation, private-sheet hint, generic URL ingest) all work. New test_iteration5.py: 16 passed, 1 skipped (.xls write requires xlwt which is not installed in this environment - parser path is exercised indirectly via unit-level tests of parse_excel which uses openpyxl on .xlsx; the .xls upload path is dead-coded for now). Full regression: test_ledgerly.py + test_iteration2.py = 26/26 passing. Frontend Upload page UI smoke verified: both tabs render with correct data-testid, file accept attribute is exactly '.csv,.tsv,.pdf,.xlsx,.xls,.ods,.ofx,.qfx', URL tab + import button work, supported formats list shows all 6 categories incl. Google Sheets help text. Empty URL toast and 400 response on private sheet URL both verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/transactions/upload (.xls)", "issue": "xlwt is not in /app/backend/requirements.txt so the .xls write side cannot be tested in CI without it. The READ side (xlrd) is installed and parse_excel falls back to xlrd if openpyxl fails, but no integration test currently exercises a real .xls byte stream end-to-end. Consider adding xlwt to dev/test requirements OR shipping a tiny binary .xls fixture under tests/fixtures/."},
+      {"endpoint": "/api/transactions/import-url", "issue": "When the URL points to a CSV that lacks Date/Description/Amount columns the endpoint correctly returns 400 'no transaction rows', but the same generic 400 is returned for many distinct failure modes (private sheet, wrong format, no columns). The Google-Sheets-private hint only fires if Google itself returns non-200, not when Google returns a 200 HTML login page. Edge case to harden later."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration5.py",
+    "/app/test_reports/pytest/iteration_5.xml",
+    "/app/test_reports/pytest/iteration_5_regression.xml"
+  ],
+  "action_items": [
+    "(Optional) Add xlwt to backend dev requirements so the .xls upload integration test can run, or commit a tiny .xls fixture under /app/backend/tests/fixtures/ and load it in test_iteration5.py::TestUploadFormats::test_xls."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~1037 lines and approaching the 700-line guideline. Parsers (parse_csv/tsv/excel/ods/ofx/pdf + helpers) could move to /app/backend/parsers.py to keep server.py focused on routing.",
+    "google_sheet_to_csv_url uses a permissive regex /spreadsheets/d/([a-zA-Z0-9_-]+) — works for all five required URL shapes (verified via TestGoogleSheetUrlHelper). Good.",
+    "/api/transactions/import-url uses synchronous requests.get inside an async endpoint - blocks the event loop. For a desktop single-user app this is fine but in a multi-user deployment switch to httpx.AsyncClient.",
+    "ofxparse triggers BeautifulSoup DeprecationWarning (findAll vs find_all). Library-level, not actionable here.",
+    "FastAPI on_event startup/shutdown is deprecated - migrate to lifespan handlers in a future cleanup pass (already flagged in iteration_3).",
+    "_PARSERS dict registers parse_pdf via post-definition assignment which is correct but a bit sneaky; a small comment is already there. Acceptable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration5.py (new - 17 test cases covering all iteration-5 surfaces)"
+  ],
+  "success_rate": {"backend": "100% (16/16 active in test_iteration5 + 26/26 regression; 1 environment-skip for .xls write)", "frontend": "100% smoke (tabs, accept attr, url input/button, help text, error toast)"},
+  "test_credentials": "n/a - no auth in this app",
+  "seed_data_creation": "Created and deleted a temporary UI smoke project (UI_Iter5_Smoke) and a pytest module-level project (TEST_Iter5). Both cleaned up at end of run. Verified via /api/projects list.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run regression: cd /app/backend && export REACT_APP_BACKEND_URL=https://statement-analyzer-35.preview.emergentagent.com && pytest tests/ -v. The full suite is now 43 tests (test_ledgerly 15 + test_iteration2 11 + test_iteration5 17 of which 1 skips when xlwt is missing). test_iteration5 is fully self-contained: it builds .xlsx via openpyxl in-memory, .ods via pandas+odf engine, OFX from a hand-written SGML envelope, and only attempts an outbound network call for the non-google CSV URL test (skipped if no internet). The Google Sheets sample URL test (1BxiMVs0XRA5...) accepts both 200 and 400 because the public state of that sheet is outside our control.",
+  "rca of the issue": "n/a - no bugs found. The .xls test skip is environment-driven (xlwt absent), not a product bug."
+}

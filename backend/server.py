@@ -157,14 +157,11 @@ def find_column(cols: List[str], keywords: List[str]) -> Optional[str]:
                 return c
     return None
 
-def parse_csv(content: bytes) -> List[Dict[str, Any]]:
-    try:
-        df = pd.read_csv(io.BytesIO(content))
-    except Exception:
-        df = pd.read_csv(io.BytesIO(content), encoding='latin-1')
+def _parse_dataframe(df: "pd.DataFrame") -> List[Dict[str, Any]]:
+    """Shared row-extraction logic for CSV / TSV / Excel / ODS dataframes."""
     cols = list(df.columns)
     date_col = find_column(cols, ['date', 'posted', 'transaction date'])
-    desc_col = find_column(cols, ['description', 'detail', 'narrative', 'memo', 'particulars', 'reference'])
+    desc_col = find_column(cols, ['description', 'detail', 'narrative', 'memo', 'particulars', 'reference', 'payee'])
     amount_col = find_column(cols, ['amount'])
     debit_col = find_column(cols, ['debit', 'paid out', 'withdrawal', 'money out'])
     credit_col = find_column(cols, ['credit', 'paid in', 'deposit', 'money in'])
@@ -186,6 +183,119 @@ def parse_csv(content: bytes) -> List[Dict[str, Any]]:
             continue
         rows.append({"date": date_val, "description": desc_val, "amount": amt})
     return rows
+
+def parse_csv(content: bytes, sep: str = ",") -> List[Dict[str, Any]]:
+    try:
+        df = pd.read_csv(io.BytesIO(content), sep=sep)
+    except Exception:
+        df = pd.read_csv(io.BytesIO(content), sep=sep, encoding='latin-1')
+    return _parse_dataframe(df)
+
+def parse_tsv(content: bytes) -> List[Dict[str, Any]]:
+    return parse_csv(content, sep="\t")
+
+def parse_excel(content: bytes) -> List[Dict[str, Any]]:
+    """Parses .xlsx (openpyxl) and .xls (xlrd). Tries each sheet, returns the first that yields rows."""
+    last_err = None
+    for engine in ("openpyxl", "xlrd"):
+        try:
+            sheets = pd.read_excel(io.BytesIO(content), sheet_name=None, engine=engine)
+            for _, df in sheets.items():
+                rows = _parse_dataframe(df)
+                if rows:
+                    return rows
+            return []
+        except Exception as e:
+            last_err = e
+            continue
+    raise ValueError(f"Could not read Excel file: {last_err}")
+
+def parse_ods(content: bytes) -> List[Dict[str, Any]]:
+    sheets = pd.read_excel(io.BytesIO(content), sheet_name=None, engine="odf")
+    for _, df in sheets.items():
+        rows = _parse_dataframe(df)
+        if rows:
+            return rows
+    return []
+
+def parse_ofx(content: bytes) -> List[Dict[str, Any]]:
+    """Open Financial Exchange — the standard format most banks export to."""
+    from ofxparse import OfxParser
+    ofx = OfxParser.parse(io.BytesIO(content))
+    rows = []
+    for acct in getattr(ofx, "accounts", []) or []:
+        statement = getattr(acct, "statement", None)
+        if not statement:
+            continue
+        for tx in getattr(statement, "transactions", []) or []:
+            try:
+                date_val = tx.date.strftime("%Y-%m-%d") if tx.date else None
+                amt = float(tx.amount) if tx.amount is not None else None
+                desc = (getattr(tx, "memo", "") or getattr(tx, "payee", "") or "").strip()
+                if date_val and desc and amt is not None:
+                    rows.append({"date": date_val, "description": desc, "amount": amt})
+            except Exception:
+                continue
+    return rows
+
+def google_sheet_to_csv_url(url: str) -> Optional[str]:
+    """Convert any public Google Sheets share URL into its CSV export URL."""
+    m = re.search(r"/spreadsheets/d/([a-zA-Z0-9_-]+)", url)
+    if not m:
+        return None
+    sheet_id = m.group(1)
+    gid_m = re.search(r"[?&#]gid=(\d+)", url)
+    gid = gid_m.group(1) if gid_m else "0"
+    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+
+# Map of supported file-type tags to their parser.
+_PARSERS: Dict[str, Any] = {
+    "csv": parse_csv,
+    "tsv": parse_tsv,
+    "pdf": None,  # filled below after parse_pdf is defined
+    "xlsx": parse_excel,
+    "xls": parse_excel,
+    "ods": parse_ods,
+    "ofx": parse_ofx,
+    "qfx": parse_ofx,
+}
+
+def detect_format(filename: str, content_type: Optional[str]) -> Optional[str]:
+    name = (filename or "").lower()
+    ct = (content_type or "").lower()
+    if name.endswith(".csv") or ct == "text/csv":
+        return "csv"
+    if name.endswith(".tsv") or ct in ("text/tab-separated-values", "text/tsv"):
+        return "tsv"
+    if name.endswith(".pdf") or ct == "application/pdf":
+        return "pdf"
+    if name.endswith(".xlsx") or "spreadsheetml" in ct:
+        return "xlsx"
+    if name.endswith(".xls") or ct == "application/vnd.ms-excel":
+        return "xls"
+    if name.endswith(".ods") or "opendocument.spreadsheet" in ct:
+        return "ods"
+    if name.endswith(".ofx") or name.endswith(".qfx") or "ofx" in ct:
+        return "ofx"
+    return None
+
+def parse_any(content: bytes, filename: str, content_type: Optional[str]) -> List[Dict[str, Any]]:
+    """Dispatch to the right parser based on filename/content_type, with sensible fallback chain."""
+    fmt = detect_format(filename, content_type)
+    parser = _PARSERS.get(fmt) if fmt else None
+    if parser is not None:
+        return parser(content)
+    # Unknown extension: try CSV, then PDF as a last resort.
+    try:
+        rows = parse_csv(content)
+        if rows:
+            return rows
+    except Exception:
+        pass
+    try:
+        return parse_pdf(content)
+    except Exception:
+        return []
 
 def parse_pdf(content: bytes) -> List[Dict[str, Any]]:
     rows = []
@@ -244,6 +354,9 @@ def parse_pdf(content: bytes) -> List[Dict[str, Any]]:
         if d and desc and amt is not None:
             rows.append({"date": d, "description": desc, "amount": amt})
     return rows
+
+# Wire parse_pdf into the dispatcher (defined after parse_pdf so we register it here).
+_PARSERS["pdf"] = parse_pdf
 
 async def apply_rules(project_id: str, description: str) -> Optional[str]:
     key = normalize_merchant(description)
@@ -341,36 +454,10 @@ async def delete_category(category_id: str):
     return {"ok": True}
 
 # ----- Transactions -----
-@api_router.post("/transactions/upload")
-async def upload_statement(project_id: str = Form(...), file: UploadFile = File(...)):
-    proj = await db.projects.find_one({"id": project_id}, {"_id": 0})
-    if not proj:
-        raise HTTPException(status_code=404, detail="Project not found")
-    content = await file.read()
-    name = (file.filename or '').lower()
-    rows = []
-    if name.endswith('.csv') or file.content_type == 'text/csv':
-        rows = parse_csv(content)
-    elif name.endswith('.pdf') or file.content_type == 'application/pdf':
-        rows = parse_pdf(content)
-    else:
-        # try CSV first
-        try:
-            rows = parse_csv(content)
-        except Exception:
-            rows = []
-        if not rows:
-            try:
-                rows = parse_pdf(content)
-            except Exception:
-                pass
-    if not rows:
-        raise HTTPException(status_code=400, detail="Could not parse any transactions from file")
-
+async def _ingest_rows(project_id: str, rows: List[Dict[str, Any]]) -> Dict[str, int]:
     inserted = 0
     skipped = 0
     for r in rows:
-        # dedupe: same project, date, description, amount
         existing = await db.transactions.find_one({
             "project_id": project_id,
             "date": r["date"],
@@ -395,6 +482,77 @@ async def upload_statement(project_id: str = Form(...), file: UploadFile = File(
         await db.transactions.insert_one(doc)
         inserted += 1
     return {"inserted": inserted, "skipped": skipped, "total": len(rows)}
+
+@api_router.post("/transactions/upload")
+async def upload_statement(project_id: str = Form(...), file: UploadFile = File(...)):
+    proj = await db.projects.find_one({"id": project_id}, {"_id": 0})
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    content = await file.read()
+    try:
+        rows = parse_any(content, file.filename or "", file.content_type)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not parse file: {e}")
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="No transactions found. Supported: CSV, TSV, PDF, Excel (.xlsx/.xls), OpenDocument (.ods), OFX/QFX.",
+        )
+    return await _ingest_rows(project_id, rows)
+
+class UrlImportPayload(BaseModel):
+    project_id: str
+    url: str
+
+@api_router.post("/transactions/import-url")
+async def import_from_url(payload: UrlImportPayload):
+    """Import transactions from a public URL. Specifically supports Google Sheets share links."""
+    proj = await db.projects.find_one({"id": payload.project_id}, {"_id": 0})
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    fetch_url = google_sheet_to_csv_url(payload.url) or payload.url
+    is_gsheet = "spreadsheets/d/" in payload.url
+
+    import requests
+    try:
+        resp = requests.get(fetch_url, timeout=30, allow_redirects=True)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not fetch URL: {e}")
+    if resp.status_code != 200:
+        hint = (
+            " — make sure the Google Sheet is shared with 'Anyone with the link'"
+            if is_gsheet else ""
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"URL returned HTTP {resp.status_code}{hint}",
+        )
+
+    content = resp.content
+    # Pick a filename hint so the dispatcher routes correctly.
+    if is_gsheet:
+        filename_hint = "google-sheet.csv"
+        ct_hint = "text/csv"
+    else:
+        # Use last path segment if it has an extension; else fall back to .csv
+        from urllib.parse import urlparse
+        path = urlparse(payload.url).path
+        filename_hint = path.rsplit("/", 1)[-1] or "import.csv"
+        ct_hint = resp.headers.get("Content-Type", "")
+
+    try:
+        rows = parse_any(content, filename_hint, ct_hint)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not parse content: {e}")
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="Fetched the URL but found no transaction rows. Check the file format and column headers.",
+        )
+    result = await _ingest_rows(payload.project_id, rows)
+    result["source"] = "google-sheets" if is_gsheet else "url"
+    return result
 
 @api_router.get("/transactions", response_model=List[Transaction])
 async def list_transactions(
