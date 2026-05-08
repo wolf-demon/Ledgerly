@@ -25,23 +25,37 @@
     "files": [
       "main.js",
       "preload.js",
-      "backend-launcher.js",
-      "package.json",
-      "../frontend/build/**/*",
-      "../backend/**/*",
-      "!../backend/__pycache__",
-      "!../backend/tests"
+      "package.json"
     ],
     "extraResources": [
       {
+        "from": "../frontend/build",
+        "to": "frontend",
+        "filter": ["**/*"]
+      },
+      {
         "from": "../backend",
         "to": "backend",
-        "filter": ["**/*", "!__pycache__", "!tests", "!*.pyc"]
+        "filter": [
+          "**/*",
+          "!__pycache__",
+          "!__pycache__/**",
+          "!tests",
+          "!tests/**",
+          "!*.pyc",
+          "!ledgerly.db",
+          "!ledgerly.db-*"
+        ]
       }
     ],
     "win": {
       "target": ["nsis"],
       "icon": "build-resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
     },
     "mac": {
       "target": ["dmg"],

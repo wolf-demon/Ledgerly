@@ -1,64 +1,81 @@
 // Electron main process for Ledgerly desktop
 // Spawns the FastAPI backend on localhost:8001 and loads the built React frontend.
-const { app, BrowserWindow, Menu, shell } = require("electron");
+const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
 const fs = require("fs");
+const http = require("http");
 
 let mainWindow;
 let backendProcess;
 
 const isDev = !app.isPackaged;
 const BACKEND_PORT = 8001;
+const DEBUG = !!process.env.LEDGERLY_DEBUG || isDev;
+
+function logFile() {
+  return path.join(app.getPath("userData"), "ledgerly.log");
+}
+function log(...args) {
+  const line = `[${new Date().toISOString()}] ${args.map(String).join(" ")}\n`;
+  process.stdout.write(line);
+  try { fs.appendFileSync(logFile(), line); } catch (e) { /* ignore */ }
+}
 
 function resolvePython() {
-  // Allow user override
   if (process.env.LEDGERLY_PYTHON) return process.env.LEDGERLY_PYTHON;
   return process.platform === "win32" ? "python" : "python3";
 }
 
 function resolveBackendDir() {
-  if (isDev) {
-    return path.join(__dirname, "..", "backend");
-  }
-  // packaged: extraResources places backend under resources/backend
+  if (isDev) return path.join(__dirname, "..", "backend");
   return path.join(process.resourcesPath, "backend");
+}
+
+function resolveFrontendIndex() {
+  if (isDev) return null; // dev uses http://127.0.0.1:3000
+  return path.join(process.resourcesPath, "frontend", "index.html");
 }
 
 function startBackend() {
   const backendDir = resolveBackendDir();
   if (!fs.existsSync(path.join(backendDir, "server.py"))) {
-    console.error("[ledgerly] backend not found at", backendDir);
-    return;
+    log("FATAL: backend not found at", backendDir);
+    return false;
   }
 
-  // Persist SQLite db in user data dir so installs don't clobber each other.
   const userData = app.getPath("userData");
+  try { fs.mkdirSync(userData, { recursive: true }); } catch (e) { /* ignore */ }
   const sqlitePath = path.join(userData, "ledgerly.db");
-
   const python = resolvePython();
-  console.log("[ledgerly] starting backend:", python, "in", backendDir);
-  console.log("[ledgerly] sqlite db at:", sqlitePath);
+  log("starting backend:", python, "in", backendDir);
+  log("sqlite db at:", sqlitePath);
 
-  backendProcess = spawn(
-    python,
-    ["-m", "uvicorn", "server:app", "--host", "127.0.0.1", "--port", String(BACKEND_PORT)],
-    {
-      cwd: backendDir,
-      env: {
-        ...process.env,
-        PYTHONUNBUFFERED: "1",
-        STORAGE: "sqlite",
-        SQLITE_PATH: sqlitePath,
-      },
-    }
-  );
+  try {
+    backendProcess = spawn(
+      python,
+      ["-m", "uvicorn", "server:app", "--host", "127.0.0.1", "--port", String(BACKEND_PORT)],
+      {
+        cwd: backendDir,
+        env: {
+          ...process.env,
+          PYTHONUNBUFFERED: "1",
+          STORAGE: "sqlite",
+          SQLITE_PATH: sqlitePath,
+          CORS_ORIGINS: "*",
+        },
+      }
+    );
+  } catch (e) {
+    log("FATAL: failed to spawn python:", e.message);
+    return false;
+  }
 
-  backendProcess.stdout.on("data", (d) => process.stdout.write(`[backend] ${d}`));
-  backendProcess.stderr.on("data", (d) => process.stderr.write(`[backend] ${d}`));
-  backendProcess.on("exit", (code) => {
-    console.log("[ledgerly] backend exited:", code);
-  });
+  backendProcess.stdout.on("data", (d) => log("[backend]", d.toString().trim()));
+  backendProcess.stderr.on("data", (d) => log("[backend!]", d.toString().trim()));
+  backendProcess.on("error", (e) => log("[backend error]", e.message));
+  backendProcess.on("exit", (code) => log("backend exited:", code));
+  return true;
 }
 
 function stopBackend() {
@@ -68,14 +85,13 @@ function stopBackend() {
   }
 }
 
-function waitForBackend(retries = 30) {
+function waitForBackend(retries = 60) {
   return new Promise((resolve) => {
-    const http = require("http");
     let tries = 0;
     const tick = () => {
       tries++;
       const req = http.get(`http://127.0.0.1:${BACKEND_PORT}/api/`, (res) => {
-        if (res.statusCode === 200) resolve(true);
+        if (res.statusCode === 200) { log("backend ready after", tries, "tries"); resolve(true); }
         else if (tries >= retries) resolve(false);
         else setTimeout(tick, 500);
       });
@@ -88,7 +104,17 @@ function waitForBackend(retries = 30) {
   });
 }
 
-function createWindow() {
+function showFatal(title, body) {
+  dialog.showMessageBoxSync({
+    type: "error",
+    title: "Ledgerly — startup error",
+    message: title,
+    detail: body + "\n\nLog file: " + logFile(),
+    buttons: ["Open log", "Quit"],
+  }) === 0 && shell.openPath(logFile());
+}
+
+function createWindow(loadTarget) {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -96,29 +122,67 @@ function createWindow() {
     minHeight: 700,
     backgroundColor: "#FDFBF7",
     title: "Ledgerly",
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      webSecurity: !isDev,
     },
   });
 
-  const indexPath = isDev
-    ? `http://127.0.0.1:3000` // dev mode: run frontend with `yarn start` in /app/frontend
-    : `file://${path.join(__dirname, "..", "frontend", "build", "index.html")}`;
+  mainWindow.once("ready-to-show", () => mainWindow.show());
 
-  mainWindow.loadURL(indexPath);
+  mainWindow.webContents.on("did-fail-load", (_, code, desc, url) => {
+    log("did-fail-load:", code, desc, url);
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
   });
+
+  if (DEBUG) mainWindow.webContents.openDevTools({ mode: "detach" });
+
+  if (loadTarget.startsWith("http")) {
+    mainWindow.loadURL(loadTarget);
+  } else {
+    mainWindow.loadFile(loadTarget);
+  }
 }
 
 app.whenReady().then(async () => {
-  startBackend();
-  await waitForBackend();
-  createWindow();
+  log("Ledgerly starting | packaged=", app.isPackaged, "platform=", process.platform);
+  log("resourcesPath=", process.resourcesPath);
+
+  const ok = startBackend();
+  if (!ok) {
+    showFatal(
+      "Could not start the local backend.",
+      "Python 3.11+ must be installed and on PATH (or set LEDGERLY_PYTHON to its full path).\nSee log for details."
+    );
+  } else {
+    const ready = await waitForBackend();
+    if (!ready) log("WARNING: backend did not respond within timeout — UI will load anyway");
+  }
+
+  let loadTarget;
+  if (isDev) {
+    loadTarget = "http://127.0.0.1:3000";
+  } else {
+    const indexPath = resolveFrontendIndex();
+    if (!fs.existsSync(indexPath)) {
+      showFatal(
+        "Frontend bundle not found.",
+        `Expected at: ${indexPath}\n\nThe app was packaged incorrectly — please re-run desktop\\build.ps1 or build.sh.`
+      );
+      app.quit();
+      return;
+    }
+    loadTarget = indexPath;
+  }
+  log("loading window:", loadTarget);
+  createWindow(loadTarget);
 
   if (process.platform === "darwin") {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
@@ -132,7 +196,7 @@ app.whenReady().then(async () => {
   }
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(loadTarget);
   });
 });
 

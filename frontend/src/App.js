@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import "@/App.css";
 import "@/index.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { ProjectProvider } from "./lib/projectContext";
 import Layout from "./components/Layout";
@@ -14,6 +14,13 @@ import Categories from "./pages/Categories";
 import Upload from "./pages/Upload";
 import Reports from "./pages/Reports";
 import Recurring from "./pages/Recurring";
+
+// In Electron the app is served via the file:// protocol, where BrowserRouter's
+// HTML5 history API breaks. Switch to HashRouter automatically in that case.
+const Router =
+  typeof window !== "undefined" && window.location.protocol === "file:"
+    ? HashRouter
+    : BrowserRouter;
 
 function Shell() {
   const [open, setOpen] = useState(false);
@@ -42,7 +49,7 @@ function Shell() {
 function App() {
   return (
     <div className="App">
-      <BrowserRouter>
+      <Router>
         <ProjectProvider>
           <Shell />
           <Toaster
@@ -56,7 +63,7 @@ function App() {
             }}
           />
         </ProjectProvider>
-      </BrowserRouter>
+      </Router>
     </div>
   );
 }
