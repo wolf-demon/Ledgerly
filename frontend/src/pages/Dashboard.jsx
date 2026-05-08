@@ -7,6 +7,7 @@ import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Upload, Tags, AlertCircle } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
+import BudgetSummary from "../components/BudgetSummary";
 
 export default function Dashboard({ onNewProject }) {
   const { active, projects, loading: projLoading } = useProject();
@@ -257,6 +258,9 @@ export default function Dashboard({ onNewProject }) {
           </div>
         </Card>
       </div>
+
+      {/* Budget summary */}
+      <BudgetSummary projectId={active.id} year={year} month={new Date().getMonth() + 1} />
 
       {/* Recent transactions */}
       <Card className="p-6 bg-white border-[#EAE3D9] shadow-none">

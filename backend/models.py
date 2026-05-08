@@ -106,3 +106,22 @@ class SettingsUpdate(BaseModel):
     ollama_url: Optional[str] = None
     ollama_model: Optional[str] = None
     emergent_key: Optional[str] = None
+
+
+class Budget(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    project_id: str
+    category_id: str
+    period: str  # "monthly" | "yearly"
+    amount: float  # always stored positive
+    rollover: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class BudgetUpsert(BaseModel):
+    project_id: str
+    category_id: str
+    period: str = "monthly"
+    amount: float
+    rollover: bool = False

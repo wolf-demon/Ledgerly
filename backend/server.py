@@ -16,7 +16,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 import app_db  # noqa: E402  (must run after load_dotenv)
-from routes import analytics, categories, categorize, projects, settings, transactions  # noqa: E402
+from routes import analytics, budgets, categories, categorize, projects, settings, transactions  # noqa: E402
 
 # Backward-compat re-exports — tests and external scripts may still import these from `server`.
 from services.parsers import (  # noqa: E402,F401
@@ -54,6 +54,7 @@ api_router.include_router(transactions.router)
 api_router.include_router(settings.router)
 api_router.include_router(analytics.router)
 api_router.include_router(categorize.router)
+api_router.include_router(budgets.router)
 
 app.include_router(api_router)
 

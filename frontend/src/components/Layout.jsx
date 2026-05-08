@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Receipt, Tags, Upload, BarChart3, Wallet, Plus, ChevronDown, Trash2, Repeat, Settings as SettingsIcon } from "lucide-react";
+import { LayoutDashboard, Receipt, Tags, Upload, BarChart3, Wallet, Plus, ChevronDown, Trash2, Repeat, Settings as SettingsIcon, Target } from "lucide-react";
 import { useProject } from "../lib/projectContext";
 import { useConfirm } from "./ConfirmDialog";
 import {
@@ -19,6 +19,7 @@ const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/transactions", label: "Transactions", icon: Receipt },
   { to: "/categories", label: "Categories", icon: Tags },
+  { to: "/budgets", label: "Budgets", icon: Target },
   { to: "/reports", label: "Yearly Report", icon: BarChart3 },
   { to: "/recurring", label: "Recurring", icon: Repeat },
   { to: "/upload", label: "Upload Statement", icon: Upload },

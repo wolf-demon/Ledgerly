@@ -48,4 +48,5 @@ async def delete_category(category_id: str):
     await db.categories.delete_one({"id": category_id})
     await db.transactions.update_many({"category_id": category_id}, {"$set": {"category_id": None}})
     await db.rules.delete_many({"category_id": category_id})
+    await db.budgets.delete_many({"category_id": category_id})
     return {"ok": True}

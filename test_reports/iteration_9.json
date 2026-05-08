@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 9 — full backend + frontend verification of new Budget tracker feature (Ledgerly). Created /app/backend/tests/test_iteration8_budgets.py with 14 pytest cases covering CRUD, validation, progress, rollover math (with prior tx + clean state), cascade-delete via project & category, and income-target progress. All 14 NEW tests pass; full regression of iter2/5/6/7/8 also passes (81 passed, 1 skipped). Frontend e2e exercised the real user flow against the public REACT_APP_BACKEND_URL: sidebar nav order verified (Dashboard → Transactions → Categories → Budgets → Yearly Report → Recurring → Upload Statement → Settings); /budgets renders with 9 budget rows after fresh project creation; all data-testids present (budget-amount/period/rollover/save per category); rollover switch correctly disabled when period=yearly and enabled when monthly; setting £200 fired 'Budget saved' toast and persisted across reload; Dashboard BudgetSummary widget switched live from empty CTA → live-summary → empty CTA when amount toggled to 0 ('Budget removed' toast confirmed). Cleanup deleted the test project at the end.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration8_budgets.py",
+    "/app/test_reports/pytest/iteration_9.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "budgets.py upsert correctly returns synthetic 0-amount Budget on amount=0 deletion so the UI keeps a stable shape — clean.",
+    "_signed_spent uses cat_type to flip expense amounts; income receipts naturally treat positive amounts as 'progress toward target' — same plumbing as required by the spec.",
+    "Rollover walk-back caps at 11 prior months and breaks early when leftover==0; safe against runaway loops.",
+    "Cascade delete is implemented at the route layer (delete_project + delete_category each call db.budgets.delete_many) — verified by tests.",
+    "SQLite schema stores rollover as INTEGER; _isoformat_doc coerces back to bool on read so the API contract stays clean.",
+    "Frontend Budgets.jsx: BudgetRow re-syncs local state when budget prop changes — important for project switch / refresh after upsert. No stale-state issues observed.",
+    "Minor: BudgetSummary uses current month from new Date() so Dashboard summary shows the live current month even if user navigated to a different month on /budgets — acceptable but worth noting if users find Dashboard widget feels disconnected from the period selector on /budgets."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration8_budgets.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 new + 81/82 regression — the 1 skipped pre-exists)",
+    "frontend": "100% (12/12 e2e checkpoints)"
+  },
+  "test_credentials": "N/A — no auth in this app",
+  "seed_data_creation": "Backend tests create per-test TEST_Iter8_Budgets projects via fixtures and tear them down. Frontend e2e creates E2E_Budgets_<ts> project then deletes it. Environment is clean post-run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All Budget tracker testids in active use: nav-budgets, budgets-page, budgets-no-project, budgets-over-banner, budgets-month-select, budgets-year-select, budget-row-<cat_id>, budget-amount-<cat_id>, budget-period-<cat_id>, budget-rollover-<cat_id>, budget-save-<cat_id>, dashboard-budget-empty, dashboard-budget-cta, dashboard-budget-summary, dashboard-budget-manage, dashboard-budget-row-<cat_id>. Backend regression suite path: /app/backend/tests/test_iteration*.py (must export REACT_APP_BACKEND_URL from frontend/.env before running pytest, e.g. `export $(grep -v '^#' /app/frontend/.env | xargs) && pytest backend/tests/`). Auth: none.",
+  "rca of the issue": "Not applicable — verification run, no defects found."
+}
