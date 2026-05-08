@@ -35,10 +35,18 @@ N/A (no auth)
 ## Test Reports
 - `/app/test_reports/iteration_1.json` — 15/15 backend, 100% frontend
 - `/app/test_reports/iteration_2.json` — 11/11 new backend, 100% new frontend
+- `/app/test_reports/iteration_3.json` — 26/26 regression on SQLite, 100% smoke
+
+### Iteration 3 (2026-02-08) — SQLite swap
+- **Storage swap: MongoDB → SQLite** (default; switchable via `STORAGE` env var)
+- Thin Motor-compatible wrapper `/app/backend/sqlite_db.py` so `server.py` is unchanged
+- Desktop Electron build needs **no MongoDB** — single-binary friendly
+- Per-user SQLite DB stored under OS app-data dir
+- New `desktop/build.ps1` (PowerShell) and `desktop/build.sh` (bash) one-command build scripts
 
 ## Backlog
-- P1: Refactor server.py (~860 lines) into routers/ subpackage
-- P1: Bank-specific PDF parser overrides (Lloyds, Monzo, Starling) for tricky layouts
+- P1: Refactor server.py (~860 lines) into routers/ subpackage when convenient
+- P1: Bank-specific PDF parser overrides (Lloyds, Monzo, Starling)
 - P2: Budget targets per category with progress bars
-- P2: Replace MongoDB with embedded SQLite for true single-binary desktop app
+- P2: PRAGMA integrity_check on startup with WAL-orphan warning
 - P2: Auto-update channel for desktop binaries
