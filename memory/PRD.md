@@ -37,6 +37,15 @@ N/A (no auth)
 - `/app/test_reports/iteration_2.json` — 11/11 new backend, 100% new frontend
 - `/app/test_reports/iteration_3.json` — 26/26 regression on SQLite, 100% smoke
 
+### Iteration 7 (2026-02-08) — Sign-flip fix, batch AI, Emergent key UI
+- **Critical bug fix**: when a category is assigned (PUT /transactions/{id}, bulk-categorize, or apply_to_similar back-apply), the transaction's amount sign is now forced to match the category's type. Fixes "everything shows as income on dashboard even after categorizing as expense" caused by parser-imported all-positive amounts.
+- **`POST /api/transactions/reclassify`** enhanced: for categorized tx → sign + type from category; for uncategorized → type from amount sign.
+- **`POST /api/transactions/bulk-suggest`** — new endpoint runs the configured AI provider over many uncategorized transactions in one go. Groups by normalized merchant key (one AI call per unique merchant), persists CategoryRule per key. `allow_create=true` lets the AI invent new sensibly-named categories on the fly. Sign-flips applied automatically.
+- **Frontend**: "Auto-categorize with AI" button on the Transactions page (top-right, alongside Re-classify and Export CSV).
+- **Emergent key UI**: Settings page adds a card with a masked password input + show/hide eye toggle + Test connection button. `AppSettings.emergent_key` falls back to bundled env key.
+- **`POST /api/settings/test-emergent`** — verifies any pasted key by issuing a tiny "ping" request.
+- Tests: 13/13 new + 54 regression = **67/68 passing** (1 skip: .xls writer not in env).
+
 ### Iteration 6 (2026-02-08) — Parser sign fix + Settings page + Ollama
 - **Parser fix**: Debit/Credit columns now take precedence over a duplicate unsigned Amount column; new Type column hint (DR/CR/DEBIT/CREDIT/IN/OUT) applied to unsigned Amount values. Fixes "all transactions tagged as income" bug for UK bank CSV exports.
 - **POST /api/transactions/reclassify** — re-derives `type` from `amount` sign for an entire project (one-click repair for already-imported wrong data).
