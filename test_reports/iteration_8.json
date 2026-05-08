@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend e2e verification of three Electron-era UI regressions in browser. All three fixes verified: (1) typing into NewProjectDialog Name + Description inputs works character-for-character; (2) per-row delete-transaction triggers custom React ConfirmDialog (not browser confirm) and removes the row; (3) delete-project menu triggers custom ConfirmDialog and removes the project. Live API smoke (POST /api/projects, POST /api/transactions/upload, DELETE /api/transactions/{id}, DELETE /api/projects/{id}, GET /api/projects) all returned expected statuses through the public REACT_APP_BACKEND_URL. 10/10 frontend checks passed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts console warning: container width(-1) and height(-1) — chart container has 0/undefined dimensions on initial render. Cosmetic only, no visible breakage."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_8.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "NewProjectDialog correctly uses uncontrolled refs + onOpenAutoFocus preventDefault — verified working in browser.",
+    "ConfirmProvider is a clean promise-based API; useConfirm() safe-default returns false when provider missing (good).",
+    "Layout.handleDelete + Transactions.remove/bulkDelete all correctly await confirm() before destructive calls — no window.confirm references remain in these flows."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (smoked endpoints via UI flow)", "frontend": "100% (10/10 checks)"},
+  "test_credentials": "N/A — no auth in this app",
+  "seed_data_creation": "Created project E2E_VerifyProject_<ts>, uploaded 3-row CSV, then deleted both transactions and project as part of teardown — environment is clean.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All three Electron regressions are fixed in browser. data-testids in use: header-new-project-btn, new-project-name-input, new-project-desc-input, submit-new-project-btn, project-switcher, project-option-{id}, new-project-menu, delete-project-menu, nav-transactions, transactions-table, delete-tx-btn-{id}, confirm-dialog, confirm-ok-btn, confirm-cancel-btn. Backend public URL is REACT_APP_BACKEND_URL from /app/frontend/.env.",
+  "rca of the issue": "Not applicable — verification run, no bugs found. Original Electron regressions root-cause was: (a) controlled inputs inside Radix Dialog losing focus per keystroke in packaged Electron (fix: uncontrolled refs + defaultValue + onOpenAutoFocus preventDefault), (b) window.confirm returns undefined in packaged Electron silently breaking delete actions (fix: ConfirmProvider/useConfirm promise-based custom Radix Dialog modal). Both fixes are intact and working."
+}
