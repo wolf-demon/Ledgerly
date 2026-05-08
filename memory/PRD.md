@@ -37,6 +37,15 @@ N/A (no auth)
 - `/app/test_reports/iteration_2.json` — 11/11 new backend, 100% new frontend
 - `/app/test_reports/iteration_3.json` — 26/26 regression on SQLite, 100% smoke
 
+### Iteration 6 (2026-02-08) — Parser sign fix + Settings page + Ollama
+- **Parser fix**: Debit/Credit columns now take precedence over a duplicate unsigned Amount column; new Type column hint (DR/CR/DEBIT/CREDIT/IN/OUT) applied to unsigned Amount values. Fixes "all transactions tagged as income" bug for UK bank CSV exports.
+- **POST /api/transactions/reclassify** — re-derives `type` from `amount` sign for an entire project (one-click repair for already-imported wrong data).
+- **Settings page** at `/settings`: AI provider selector (Emergent cloud / Ollama local / Disabled), Ollama URL + model fields, "Test connection" button, OS-aware install instructions with copy-to-clipboard buttons.
+- **Ollama integration**: `/api/categorize/suggest` now dispatches via `settings.ai_provider`. Calls Ollama's `/api/chat` REST endpoint with `format: json` for structured output. Friendly error if Ollama isn't running or the model isn't pulled.
+- **GET/PUT /api/settings**, **POST /api/settings/test-ollama** — new endpoints; `settings` table added to SQLite schema (auto-migrates on next startup).
+- Sidebar nav: new "Settings" link.
+- Tests: 12/12 new + 42 regression = **54/54 passing**.
+
 ### Iteration 5 (2026-02-08) — More file formats
 - **Excel** (`.xlsx` via openpyxl, `.xls` via xlrd) — first sheet with Date/Description/Amount cols is auto-detected
 - **OpenDocument Spreadsheet** (`.ods`) — LibreOffice / Apple Numbers exports
