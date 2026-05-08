@@ -13,6 +13,7 @@ import Transactions from "./pages/Transactions";
 import Categories from "./pages/Categories";
 import Upload from "./pages/Upload";
 import Reports from "./pages/Reports";
+import Recurring from "./pages/Recurring";
 
 function Shell() {
   const [open, setOpen] = useState(false);
@@ -30,6 +31,7 @@ function Shell() {
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/categories" element={<Categories />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/recurring" element={<Recurring />} />
         <Route path="/upload" element={<Upload />} />
       </Routes>
       <NewProjectDialog open={open} onOpenChange={setOpen} onCreated={handleCreated} />

@@ -1,0 +1,61 @@
+{
+  "name": "ledgerly-desktop",
+  "version": "1.0.0",
+  "description": "Ledgerly desktop app - Personal finance categorizer",
+  "main": "main.js",
+  "author": "Ledgerly",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:frontend": "cd ../frontend && yarn install && cross-env REACT_APP_BACKEND_URL=http://127.0.0.1:8001 yarn build",
+    "pack": "electron-builder --dir",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux",
+    "build:all": "yarn build:frontend && electron-builder -mwl"
+  },
+  "build": {
+    "appId": "com.ledgerly.app",
+    "productName": "Ledgerly",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "backend-launcher.js",
+      "package.json",
+      "../frontend/build/**/*",
+      "../backend/**/*",
+      "!../backend/__pycache__",
+      "!../backend/tests"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": ["**/*", "!__pycache__", "!tests", "!*.pyc"]
+      }
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "build-resources/icon.ico"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.finance",
+      "icon": "build-resources/icon.icns"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Office"
+    }
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}

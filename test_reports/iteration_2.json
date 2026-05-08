@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 2 testing complete. Backend: all 11 new pytest cases passed (bulk-categorize empty/invalid/with-rule/multi-no-rule, CSV export headers/year-filter/Uncategorized label, recurring detection on monthly cadence with forecast totals, recurring lookback filter, recurring empty project, yearly analytics now splits Uncategorized into separate income & expense rows). Frontend: created project, uploaded sample CSV, verified Transactions page bulk UI (select-all-checkbox, select-tx-{id}, bulk-actions-bar, bulk-categorize-btn dropdown with 9 bulk-cat-{id} options, bulk-apply-rule checkbox, bulk-delete-btn rendered before action), Export CSV button present (export-csv-btn). Recurring page (/recurring) reachable via nav-recurring sidebar link, lookback select works (data-testid recurring-lookback-select). Yearly Report renders an 'Uncategorized' row in the Expense heatmap (gray dot, £97.20 year total) — confirms iteration 1 design feedback is resolved.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Yearly Report - Uncategorized row", "issues": ["Heatmap cells for the 'Uncategorized' row appear to have very low/no color contrast on the rendered cells (light tan blocks barely visible against background). Consider increasing color intensity for uncategorized buckets or matching the existing scale used for categorized rows."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration2.py",
+    "/app/backend/tests/test_ledgerly.py",
+    "/app/test_reports/pytest/iter2_results.xml"
+  ],
+  "action_items": [
+    "(Optional design polish) Increase heatmap cell color contrast for the Uncategorized row in the Yearly Report Expense tab; current gray (#999999) with low opacity makes the monthly cells nearly invisible."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~860 lines — exceeds 700-line guideline. Split into modules (routers/{projects,categories,transactions,analytics,bulk_export}.py + helpers/parsers.py) before further iterations.",
+    "analytics_recurring uses datetime arithmetic with timedelta imported inside the loop (line ~798). Move 'from datetime import timedelta' to module-level imports for cleanliness.",
+    "Recurring 'next_expected' uses last_seen + avg_gap_days; for monthly cadence (avg_gap 28-32) this is fine, but cadence='quarterly' uses occurrences_per_month=30/avg_gap which yields fractional <1 — formula is sensible but document expected unit (per-month equivalent).",
+    "bulk_categorize back-apply loops in Python over up to 50k tx; for large datasets prefer single update_many with $or of normalized keys precomputed, or store normalized merchant key on each tx at insert time for indexed lookup.",
+    "CSV export uses StreamingResponse but builds full content in StringIO buffer first (no real streaming). For very large projects consider an async generator yielding lines.",
+    "Frontend Transactions.jsx exportCSV opens window with raw API URL — works but bypasses axios baseURL config; OK since API already absolute via lib/api. Confirmed."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration2.py (new)"],
+  "success_rate": {"backend": "100% (11/11 iter2 + 15/15 iter1 reusable)", "frontend": "100% of new flows verified"},
+  "test_credentials": "N/A (no auth in app)",
+  "seed_data_creation": "Created TEST_Iter2, TEST_ExportUncat, TEST_EmptyRec, TEST_YearlySplit, TEST_UI_<ts> projects during tests; all cleaned up via DELETE /projects/{id}.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 2 regression suite at /app/backend/tests/test_iteration2.py. Run: REACT_APP_BACKEND_URL=<url> pytest /app/backend/tests/ -v --junitxml=/app/test_reports/pytest/results.xml. New testids: select-tx-{id}, select-all-checkbox, bulk-actions-bar, bulk-categorize-btn, bulk-cat-{cat_id}, bulk-apply-rule, bulk-delete-btn, bulk-clear-btn, export-csv-btn, nav-recurring, recurring-lookback-select, recurring-expense-list, recurring-income-list, recurring-row-{merchant_key}, empty-recurring-{income|expense}. Note: Recurring forecast card labels are CSS-uppercased — assert against innerText with .upper() or use selectors. Electron config in /app/desktop was NOT exercised (out of scope for web tests).",
+  "rca of the issue": "N/A — no failures detected."
+}

@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { useProject } from "../lib/projectContext";
-import api, { formatGBP } from "../lib/api";
+import api, { formatGBP, API } from "../lib/api";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Tag, Search, Trash2, Sparkles, Upload as UploadIcon } from "lucide-react";
+import { Checkbox } from "../components/ui/checkbox";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenuLabel, DropdownMenuSeparator,
+} from "../components/ui/dropdown-menu";
+import { Tag, Search, Trash2, Sparkles, Upload as UploadIcon, Download, Wand2, X } from "lucide-react";
 import CategorizeDialog from "../components/CategorizeDialog";
 import { toast } from "sonner";
 
@@ -21,6 +26,8 @@ export default function Transactions() {
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [bulkApplyRule, setBulkApplyRule] = useState(true);
 
   const load = useCallback(async () => {
     if (!active) return;
@@ -34,6 +41,7 @@ export default function Transactions() {
       ]);
       setTransactions(t.data);
       setCategories(c.data);
+      setSelected(new Set());
     } finally {
       setLoading(false);
     }
@@ -52,6 +60,23 @@ export default function Transactions() {
     !search ? true : t.description.toLowerCase().includes(search.toLowerCase())
   );
 
+  const allSelected = filtered.length > 0 && filtered.every((t) => selected.has(t.id));
+  const someSelected = selected.size > 0 && !allSelected;
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map((t) => t.id)));
+    }
+  };
+
+  const toggle = (id) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+
   const remove = async (id) => {
     if (!window.confirm("Delete this transaction?")) return;
     await api.delete(`/transactions/${id}`);
@@ -59,13 +84,54 @@ export default function Transactions() {
     load();
   };
 
+  const bulkCategorize = async (categoryId) => {
+    if (selected.size === 0) return;
+    try {
+      const res = await api.post("/transactions/bulk-categorize", {
+        transaction_ids: Array.from(selected),
+        category_id: categoryId,
+        apply_to_similar: bulkApplyRule,
+      });
+      const extra = res.data.similar_applied || 0;
+      toast.success(
+        `Categorized ${res.data.updated} transactions${extra ? ` and ${extra} similar` : ""}`
+      );
+      load();
+    } catch {
+      toast.error("Bulk categorize failed");
+    }
+  };
+
+  const bulkDelete = async () => {
+    if (selected.size === 0) return;
+    if (!window.confirm(`Delete ${selected.size} selected transactions?`)) return;
+    await Promise.all(Array.from(selected).map((id) => api.delete(`/transactions/${id}`)));
+    toast.success(`Deleted ${selected.size} transactions`);
+    load();
+  };
+
+  const exportCSV = () => {
+    const url = `${API}/transactions/export?project_id=${active.id}`;
+    window.open(url, "_blank");
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-[#656C5A]">Ledger</p>
-        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-1" style={{ fontFamily: "Work Sans" }}>
-          Transactions
-        </h1>
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-[#656C5A]">Ledger</p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-1" style={{ fontFamily: "Work Sans" }}>
+            Transactions
+          </h1>
+        </div>
+        <Button
+          onClick={exportCSV}
+          variant="outline"
+          data-testid="export-csv-btn"
+          className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
+        >
+          <Download className="w-4 h-4 mr-2" /> Export CSV
+        </Button>
       </div>
 
       <Card className="p-4 bg-white border-[#EAE3D9] shadow-none">
@@ -100,6 +166,79 @@ export default function Transactions() {
         </div>
       </Card>
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-md bg-[#364C2E] text-white sticky top-4 z-10 shadow-lg"
+          data-testid="bulk-actions-bar"
+        >
+          <span className="font-medium">{selected.size} selected</span>
+          <span className="text-white/40">|</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                data-testid="bulk-categorize-btn"
+                className="bg-white/15 hover:bg-white/25 text-white border-0"
+              >
+                <Wand2 className="w-4 h-4 mr-1.5" /> Categorize as...
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="max-h-80 overflow-auto">
+              <DropdownMenuLabel>Income</DropdownMenuLabel>
+              {categories.filter((c) => c.type === "income").map((c) => (
+                <DropdownMenuItem
+                  key={c.id}
+                  data-testid={`bulk-cat-${c.id}`}
+                  onClick={() => bulkCategorize(c.id)}
+                >
+                  <span className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: c.color }} />
+                  {c.name}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Expense</DropdownMenuLabel>
+              {categories.filter((c) => c.type === "expense").map((c) => (
+                <DropdownMenuItem
+                  key={c.id}
+                  data-testid={`bulk-cat-${c.id}`}
+                  onClick={() => bulkCategorize(c.id)}
+                >
+                  <span className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: c.color }} />
+                  {c.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <label className="flex items-center gap-2 text-xs cursor-pointer ml-1">
+            <Checkbox
+              checked={bulkApplyRule}
+              onCheckedChange={(v) => setBulkApplyRule(!!v)}
+              data-testid="bulk-apply-rule"
+              className="border-white/40 data-[state=checked]:bg-white data-[state=checked]:text-[#364C2E]"
+            />
+            Remember rule for similar
+          </label>
+          <Button
+            size="sm"
+            onClick={bulkDelete}
+            data-testid="bulk-delete-btn"
+            className="bg-[#D96C4E] hover:bg-[#C0593E] text-white ml-auto"
+          >
+            <Trash2 className="w-4 h-4 mr-1.5" /> Delete
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setSelected(new Set())}
+            data-testid="bulk-clear-btn"
+            className="text-white/80 hover:bg-white/10 hover:text-white"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
+
       <Card className="bg-white border-[#EAE3D9] shadow-none overflow-hidden">
         {loading ? (
           <div className="p-8 text-[#656C5A]">Loading transactions...</div>
@@ -117,6 +256,13 @@ export default function Transactions() {
             <table className="w-full text-sm" data-testid="transactions-table">
               <thead>
                 <tr className="text-left text-[#656C5A] border-b border-[#EAE3D9]">
+                  <th className="py-3 px-4 w-10">
+                    <Checkbox
+                      checked={allSelected || (someSelected ? "indeterminate" : false)}
+                      onCheckedChange={toggleAll}
+                      data-testid="select-all-checkbox"
+                    />
+                  </th>
                   <th className="py-3 px-4 font-medium">Date</th>
                   <th className="py-3 px-4 font-medium">Description</th>
                   <th className="py-3 px-4 font-medium">Category</th>
@@ -127,8 +273,19 @@ export default function Transactions() {
               <tbody>
                 {filtered.map((t) => {
                   const cat = catMap[t.category_id];
+                  const isSel = selected.has(t.id);
                   return (
-                    <tr key={t.id} className="border-b border-[#EAE3D9]/50 hover:bg-[#F4EBE1]/30 transition-colors">
+                    <tr
+                      key={t.id}
+                      className={`border-b border-[#EAE3D9]/50 transition-colors ${isSel ? "bg-[#F4EBE1]/50" : "hover:bg-[#F4EBE1]/30"}`}
+                    >
+                      <td className="py-3 px-4">
+                        <Checkbox
+                          checked={isSel}
+                          onCheckedChange={() => toggle(t.id)}
+                          data-testid={`select-tx-${t.id}`}
+                        />
+                      </td>
                       <td className="py-3 px-4 text-[#656C5A] whitespace-nowrap">{t.date}</td>
                       <td className="py-3 px-4 max-w-md truncate" title={t.description}>{t.description}</td>
                       <td className="py-3 px-4">
@@ -190,7 +347,7 @@ export default function Transactions() {
       />
 
       <p className="text-xs text-[#656C5A] flex items-center gap-1.5">
-        <Sparkles className="w-3.5 h-3.5" /> Tip: when you categorize a transaction, enable "Remember for similar" to auto-classify future imports.
+        <Sparkles className="w-3.5 h-3.5" /> Tip: select multiple rows to categorize them at once. Enable "Remember rule" to auto-classify future imports.
       </p>
     </div>
   );

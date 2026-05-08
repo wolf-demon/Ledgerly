@@ -1,0 +1,55 @@
+name: Build desktop binaries
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+          - os: macos-latest
+            target: mac
+          - os: ubuntu-latest
+            target: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend deps (used by electron-builder when packaging)
+        run: pip install -r backend/requirements.txt
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          REACT_APP_BACKEND_URL: http://127.0.0.1:8001
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+
+      - name: Build Electron desktop binary
+        working-directory: desktop
+        run: |
+          yarn install --frozen-lockfile
+          yarn dist:${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ledgerly-${{ matrix.os }}
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.dmg
+            desktop/dist/*.AppImage
+          if-no-files-found: ignore
