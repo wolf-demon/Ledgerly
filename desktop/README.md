@@ -125,7 +125,7 @@ update check.
 
 A ready-to-use workflow at `.github/workflows/desktop-release.yml` builds
 **Windows + macOS + Linux installers in parallel** and attaches them to a
-GitHub Release whenever you push a tag like `v1.0.1`:
+single GitHub Release whenever you push a tag like `v1.0.1`:
 
 ```bash
 # bump version in desktop/package.json AND frontend/package.json
@@ -134,15 +134,24 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
-The workflow:
-1. Spins up a `windows-2022`, `macos-14`, and `ubuntu-22.04` runner concurrently.
-2. Each runner downloads the bundled Python for its target OS, builds the React
-   frontend, then runs `yarn publish:win` / `:mac` / `:linux`.
-3. `electron-builder` uploads the artifacts (`*.exe`, `*.dmg`, `*.zip`,
-   `*.AppImage`, `latest*.yml`) to a GitHub Release matching the tag.
-4. Each runner *also* uploads its artifacts as a workflow artifact (14-day
-   retention) so you can download them manually even if the release upload
-   fails.
+The workflow uses a **build → release** split:
+
+1. **Three `build` jobs** run concurrently on `windows-2022`, `macos-14`,
+   `ubuntu-22.04`. Each downloads bundled Python, builds the React frontend,
+   then runs `yarn dist:*` (no publish) and uploads its installers as
+   workflow artifacts.
+2. **One `release` job** runs after all three, downloads every artifact, and
+   creates a single GitHub Release for the tag with everything attached
+   (`*.exe`, `*.dmg`, `*.zip`, `*.AppImage`, `latest*.yml`,
+   `*.blockmap`) using `softprops/action-gh-release@v2`.
+
+Why split? It's far more reliable than letting three runners race to upload
+to the same release, and you can grab the binaries from the workflow
+**Artifacts** tab even if the release step fails.
+
+You can also trigger the workflow manually (Actions → Build & Release Desktop
+→ "Run workflow") to produce installers without creating a release — handy
+for testing.
 
 **Required secrets:** none for unsigned builds — the auto-provided
 `GITHUB_TOKEN` is enough. Optional secrets for code-signing:
