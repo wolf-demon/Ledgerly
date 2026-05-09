@@ -1,13 +1,13 @@
 {
   "name": "ledgerly-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Ledgerly desktop app - Personal finance categorizer",
   "main": "main.js",
   "author": "Ledgerly",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/CHANGE_ME_OWNER/CHANGE_ME_REPO.git"
+    "url": "https://github.com/wolf-demon/Ledgerly.git"
   },
   "scripts": {
     "start": "electron .",
