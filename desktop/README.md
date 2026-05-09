@@ -106,13 +106,12 @@ download the changed bytes between versions.
 
 ### Default publish target — GitHub Releases
 
-Set two env vars before running the publish script and `electron-builder` will
-upload the artifacts (`*.exe`, `*.dmg`, `*.zip`, `*.AppImage`) plus the
-`latest*.yml` manifests to a draft release for the matching tag:
+`electron-builder` reads the GitHub repo from your `package.json -> repository`
+field. **Edit `desktop/package.json` once** and replace
+`CHANGE_ME_OWNER/CHANGE_ME_REPO` with your actual GitHub URL — that's the only
+manual step. After that:
 
 ```bash
-export LEDGERLY_GH_OWNER=your-github-username-or-org
-export LEDGERLY_GH_REPO=ledgerly
 export GH_TOKEN=ghp_xxx_with_repo_scope     # personal access token
 cd desktop
 yarn publish:win        # or publish:mac / publish:linux / publish:all
@@ -121,6 +120,46 @@ yarn publish:win        # or publish:mac / publish:linux / publish:all
 `GH_TOKEN` is what `electron-builder` uses to upload. Promote the draft to a
 published release and every installed Ledgerly will pick it up on its next
 update check.
+
+### CI release on every tag — recommended
+
+A ready-to-use workflow at `.github/workflows/desktop-release.yml` builds
+**Windows + macOS + Linux installers in parallel** and attaches them to a
+GitHub Release whenever you push a tag like `v1.0.1`:
+
+```bash
+# bump version in desktop/package.json AND frontend/package.json
+git add -A && git commit -m "Release v1.0.1"
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+The workflow:
+1. Spins up a `windows-2022`, `macos-14`, and `ubuntu-22.04` runner concurrently.
+2. Each runner downloads the bundled Python for its target OS, builds the React
+   frontend, then runs `yarn publish:win` / `:mac` / `:linux`.
+3. `electron-builder` uploads the artifacts (`*.exe`, `*.dmg`, `*.zip`,
+   `*.AppImage`, `latest*.yml`) to a GitHub Release matching the tag.
+4. Each runner *also* uploads its artifacts as a workflow artifact (14-day
+   retention) so you can download them manually even if the release upload
+   fails.
+
+**Required secrets:** none for unsigned builds — the auto-provided
+`GITHUB_TOKEN` is enough. Optional secrets for code-signing:
+
+| Secret | Purpose | Where to get it |
+|---|---|---|
+| `APPLE_CERT_P12` | base64'd Developer ID Application cert | export `.p12` from Keychain, `base64 cert.p12 \| pbcopy` |
+| `APPLE_CERT_PASSWORD` | password for the `.p12` | when you exported it |
+| `APPLE_ID` | your Apple Dev account email | Apple Developer portal |
+| `APPLE_APP_SPECIFIC_PASSWORD` | for notarization | https://appleid.apple.com → Sign-in & Security → App-Specific Passwords |
+| `APPLE_TEAM_ID` | 10-char team id | Apple Developer → Membership |
+| `WINDOWS_CERT_P12` | base64'd Authenticode `.pfx` | from your CA (DigiCert, Sectigo, etc.) |
+| `WINDOWS_CERT_PASSWORD` | password for the `.pfx` | when you bought/exported it |
+
+Without these, builds still succeed — they're just unsigned. Mac users will
+have to right-click → Open the first time, and **auto-update on macOS will not
+work** until the build is signed + notarized.
 
 ### Custom feed (S3, your own server, etc.)
 

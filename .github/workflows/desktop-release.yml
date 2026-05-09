@@ -1,0 +1,143 @@
+name: Build & Release Desktop
+
+# Trigger on tag push (v1.0.0, v1.2.3-beta.1, etc.) — produces signed installers
+# for Windows + macOS + Linux and attaches them to a GitHub Release.
+#
+# Quick usage:
+#   git tag v1.0.1
+#   git push origin v1.0.1
+#
+# Required repo secrets (only the ones you actually need):
+#   GITHUB_TOKEN              — auto-provided by Actions, no setup needed.
+#
+#   Optional macOS code-signing (recommended — without these, macOS users
+#   see a Gatekeeper warning and auto-update won't work on Mac):
+#     APPLE_CERT_P12          — base64-encoded .p12 cert (a Developer ID Application cert)
+#     APPLE_CERT_PASSWORD     — password for the .p12
+#     APPLE_ID                — your Apple ID email
+#     APPLE_APP_SPECIFIC_PASSWORD — app-specific pwd from appleid.apple.com
+#     APPLE_TEAM_ID           — your 10-char Apple Developer Team ID
+#
+#   Optional Windows code-signing:
+#     WINDOWS_CERT_P12        — base64-encoded .pfx cert
+#     WINDOWS_CERT_PASSWORD   — password for the .pfx
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # needed by electron-builder to create/edit a release
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14            # ARM runner — produces a universal .dmg
+            python_target: mac-arm
+          - os: windows-2022
+            python_target: win
+          - os: ubuntu-22.04
+            python_target: linux
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: yarn
+          cache-dependency-path: |
+            frontend/yarn.lock
+            desktop/yarn.lock
+
+      - name: Install yarn
+        run: npm install -g yarn
+
+      # ── Bundled Python runtime ──────────────────────────────────────────
+      - name: Download Python runtime (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: desktop
+        run: ./scripts/download-python.ps1 -Target ${{ matrix.python_target }}
+
+      - name: Download Python runtime (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        working-directory: desktop
+        run: bash ./scripts/download-python.sh ${{ matrix.python_target }}
+
+      # ── Frontend build ──────────────────────────────────────────────────
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          REACT_APP_BACKEND_URL: http://127.0.0.1:8001
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+
+      - name: Install desktop deps
+        working-directory: desktop
+        run: yarn install --frozen-lockfile
+
+      # ── macOS code-signing setup (only when secrets present) ────────────
+      - name: Import Apple certificate
+        if: runner.os == 'macOS' && env.APPLE_CERT_P12 != ''
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN=$RUNNER_TEMP/build.keychain
+          echo "$APPLE_CERT_P12" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security create-keychain -p actions $KEYCHAIN
+          security default-keychain -s $KEYCHAIN
+          security unlock-keychain -p actions $KEYCHAIN
+          security import $RUNNER_TEMP/cert.p12 -k $KEYCHAIN -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions $KEYCHAIN
+          rm $RUNNER_TEMP/cert.p12
+
+      # ── Build + Publish ────────────────────────────────────────────────
+      - name: Build & publish (${{ matrix.os }})
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS notarization (only used if the secrets are set):
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows code-signing (only used if the secrets are set):
+          CSC_LINK: ${{ secrets.WINDOWS_CERT_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            yarn publish:win
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            yarn publish:mac
+          else
+            yarn publish:linux
+          fi
+
+      # ── Backup: upload artifacts so you can grab them even if release upload fails ──
+      - name: Upload installers as workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ledgerly-${{ runner.os }}
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+            desktop/dist/*.AppImage
+            desktop/dist/latest*.yml
+          if-no-files-found: ignore
+          retention-days: 14
