@@ -126,6 +126,42 @@ N/A (no auth)
 - P2: PRAGMA integrity_check on startup with WAL-orphan warning
 - P2: In-app "Updates" banner driven by IPC bridge from `updater.js`
 - P2: Sync Dashboard BudgetSummary period with `/budgets` page selector (cosmetic)
+- P3: Document the minimum Electron version that supports CSS `color-mix()` (Chromium 111+) or ship a PostCSS fallback for the theme tints.
+- P3: Wire `Skeleton`/`EmptyState` into more pages (Transactions list, Categories empty, Budgets empty) for fuller loading polish.
+
+### Iteration 13 (2026-02-12) — Theming engine + UI polish sweep + expanded category palette
+
+**User ask:** sweep ALL pages for visual consistency + micro-interactions + density, add more colour options for categories, add multiple selectable themes.
+
+**Theming engine:**
+- New `lib/themeContext.jsx` (`ThemeProvider`, `useTheme`, `THEMES`) + `lib/useThemeColors.js` hook that resolves CSS variables into literal hex for Recharts SVG attributes (with a `MutationObserver` on `data-theme` so charts re-paint on theme switch).
+- 4 production-quality themes selectable on Settings: **Sage** (warm earth, default), **Midnight** (deep slate + emerald, dark), **Ocean** (cool light blue/teal), **Aurora** (deep violet, dark). Each ships with a 4-swatch preview card and a `light`/`dark` pill.
+- Choice persisted to `localStorage("ledgerly.theme")`, applied via `<html data-theme="…">` + `dark` class for shadcn primitives.
+- `index.css` now defines `--c-bg / --c-bg-alt / --c-card / --c-surface / --c-border / --c-ink / --c-muted / --c-muted-2 / --c-primary / --c-primary-deep / --c-primary-soft / --c-success / --c-danger / --c-danger-deep / --c-accent / --c-accent-2 / --c-warn / --c-on-primary` for every theme, plus shadcn HSL surfaces kept in sync.
+
+**Global polish (index.css):**
+- Smooth 200ms theme transitions on body, 150ms hover/focus transitions on every interactive element.
+- `focus-visible` outline ring tied to `--c-primary` (45% mix).
+- Reusable `ledger-fade-in` (page entrance), `ledger-skeleton` (shimmer), `ledger-card` (hover lift), themed `.scrollbar-thin` and grain background.
+
+**Mass migration:**
+- Bulk-replaced ~600+ hardcoded hex literals across every page + non-shadcn component with `var(--c-*)` references.
+- Converted `bg-[var(--c-X)]/N` / `border-[var(--c-X)]/N` / `text-[var(--c-X)]/N` patterns to `color-mix(in_srgb, var(--c-X) N%, transparent)` because Tailwind's slash-opacity syntax doesn't apply to CSS vars.
+- Replaced literal `bg-white` and `text-white` with theme-aware `bg-[var(--c-card)]` / `text-[var(--c-on-primary)]`.
+- Recharts (`Dashboard.jsx`) now reads palette from `useThemeColors()` so bars/cells/tooltip background follow the active theme.
+
+**Expanded category palette:**
+- New `components/ColorPicker.jsx` exporting `CATEGORY_COLORS` — 40 curated colours grouped by hue family (greens, teals, blues, purples, pinks, ambers, browns, neutrals) in a 10-column grid with hover-scale + ring-marked selection.
+- Categories page create/edit dialog now uses the picker (`data-testid="category-color-picker"` + per-swatch `data-testid="color-<hex>"`).
+
+**Polish primitives ready for future iterations:**
+- `components/Skeleton.jsx` (shimmering placeholder + `<SkeletonLines>`)
+- `components/EmptyState.jsx` (icon-circle + title + description + optional action)
+
+**Tests:**
+- Pytest regression: **115/116 passing, 1 skipped, 0 failed** (no API changes).
+- Frontend e2e via testing agent: theme picker round-trips through localStorage + reload, all 8 pages render in both light & dark, new ColorPicker round-trips a chosen colour through `POST /api/categories` → `GET /api/categories`.
+- Report: `/app/test_reports/iteration_13.json` (100% success).
 
 ### Iteration 12 (2026-02-08) — Split transactions + AI-assisted detection
 
