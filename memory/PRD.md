@@ -123,7 +123,29 @@ N/A (no auth)
 - Result: **14/14 new + 81/82 regression = 95/96 passing**, frontend e2e 12/12.
 
 ## Backlog
-- P1: Bank-specific PDF parser overrides (Lloyds, Monzo, Starling)
+- P1: Bank-specific PDF parser overrides — DONE for Nationwide + Bank of Scotland in iteration 10
 - P2: PRAGMA integrity_check on startup with WAL-orphan warning
 - P2: In-app "Updates" banner driven by IPC bridge from `updater.js`
 - P2: Sync Dashboard BudgetSummary period with `/budgets` page selector (cosmetic)
+
+### Iteration 10 (2026-02-08) — Real-world PDF parser fixes
+
+**Two real UK bank statements were failing**:
+1. **Nationwide FlexBasic**: parsed 0–8 rows instead of 20. PDF splits the table across multiple `pdfplumber` tables on the same page (only the first has a header), transactions span multiple rows (continuation lines), and dates like "09 Feb" lack a year.
+2. **Bank of Scotland**: parsed 0 rows. PDF text layer has overlapping fragments that interleave column headers into cell data — every row reads like `D0ate 2 Jan 26 DPescription POINT_*KENILWORTH TDype EB Moneyb Ilna n(k£.) 23.98Money Out (£)`.
+
+**Fixes (all in `services/parsers.py`):**
+- `_infer_year()` — pulls the statement year from several UK statement header patterns ("Statementdate: 04 March 2026", "01 January 2026 to 31 January 2026", etc.).
+- `_parse_pdf_tables_with_continuation()` — header-less continuation tables on the same page inherit the previous table's column indices; description-only continuation rows append to the current transaction; date-bearing rows inherit the year from the statement header.
+- `_parse_bos_text()` + `_BOS_ROW` — specialised regex captures the leaked first character of each cell (`D{X}ate`, `D{Y}escription`, `T{Z}ype`) and re-attaches them, with smart de-dup so "P"+"POINT" doesn't become "PPOINT".
+- `_parse_pdf_text_lines()` — generic UK-line-format fallback (`<DD Mon> <desc> <amount> <opt balance>`); catches transactions tables miss entirely, infers expense/income sign from keywords ("direct debit", "bank credit", etc.).
+- `_dedupe_rows()` — combines table + text-line results without double-counting; prefers the longer description (tables are usually richer).
+
+**Result on the user-supplied statements:**
+- Nationwide: **20 transactions parsed, net £-501.56 — exactly matches start£1,007.05 → end £505.49**.
+- Bank of Scotland: **70 transactions parsed**, all descriptions reconstructed correctly (ASDA STORES, TESCO STORES, VANQUIS BANK, MARKS&SPENCER, MATHEW MCNEE, etc.), income vs expense signs correct (FUTURESE LTD salary positive, CAPITAL ONE payment negative).
+
+**Tests:**
+- New `/app/backend/tests/fixtures/{nationwide_mar2026,bos_jan2026}.pdf` pinned.
+- New `/app/backend/tests/test_iteration10_real_pdfs.py` — 9 cases (row counts, balance math, key transactions, sign correctness, first-letter recovery, multi-day date decoding).
+- Result: **9/9 new + 81/82 regression = 90/91 passing** (1 pre-existing skip).
