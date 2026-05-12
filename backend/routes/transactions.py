@@ -11,6 +11,7 @@ from app_db import db
 from models import (
     BankAccount,
     CategoryRule,
+    SplitPayload,
     Transaction,
     TransactionUpdate,
     UrlImportPayload,
@@ -235,6 +236,7 @@ async def list_transactions(
     month: Optional[int] = None,
     uncategorized: Optional[bool] = None,
     bank_account_id: Optional[str] = None,
+    include_split_parents: bool = False,
     limit: int = 5000,
 ):
     q: Dict[str, Any] = {"project_id": project_id}
@@ -248,9 +250,107 @@ async def list_transactions(
     if bank_account_id:
         q["bank_account_id"] = bank_account_id
     docs = await db.transactions.find(q, {"_id": 0}).sort("date", -1).to_list(limit)
+    # By default hide the original "parent" of a split — its money is now
+    # represented by the child split rows. Callers can opt back in with
+    # ?include_split_parents=true.
+    if not include_split_parents:
+        docs = [d for d in docs if not d.get("is_split")]
     for d in docs:
         if isinstance(d.get('created_at'), str):
             d['created_at'] = datetime.fromisoformat(d['created_at'])
+    return docs
+
+
+# ───────────────────────── splits ─────────────────────────────────────────
+
+def _signs_match(parent_amount: float, lines: list) -> bool:
+    if parent_amount >= 0:
+        return all(line.amount >= 0 for line in lines)
+    return all(line.amount <= 0 for line in lines)
+
+
+@router.post("/transactions/{tx_id}/split", response_model=List[Transaction])
+async def split_transaction(tx_id: str, payload: SplitPayload):
+    """Split a transaction into multiple child transactions.
+
+    - All split amounts must share the parent's sign (expense → negative).
+    - Sum of split amounts must equal parent.amount within £0.01.
+    - The parent gets `is_split=True` and stops contributing to category totals
+      (its child rows take over).
+    """
+    parent = await db.transactions.find_one({"id": tx_id}, {"_id": 0})
+    if not parent:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if parent.get("is_split"):
+        raise HTTPException(status_code=400, detail="Transaction is already split. Un-split it first to re-split.")
+    if parent.get("parent_transaction_id"):
+        raise HTTPException(status_code=400, detail="Cannot split a child split row")
+    if not payload.splits or len(payload.splits) < 2:
+        raise HTTPException(status_code=400, detail="Provide at least 2 split lines")
+
+    parent_amount = float(parent["amount"])
+    if not _signs_match(parent_amount, payload.splits):
+        raise HTTPException(status_code=400, detail="All split amounts must match the sign of the parent (expenses negative, income positive)")
+
+    total = sum(float(line.amount) for line in payload.splits)
+    if abs(total - parent_amount) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Split lines total {total:.2f} but parent is {parent_amount:.2f} (delta {total - parent_amount:.2f})",
+        )
+
+    # Build category map once for fast type lookups.
+    cats = await db.categories.find({"project_id": parent["project_id"]}, {"_id": 0}).to_list(500)
+    cat_map = {c["id"]: c for c in cats}
+
+    created: List[Dict[str, Any]] = []
+    for idx, line in enumerate(payload.splits):
+        cat = cat_map.get(line.category_id) if line.category_id else None
+        ttype = cat["type"] if cat else ("income" if line.amount >= 0 else "expense")
+        amount = force_amount_sign(line.amount, cat["type"]) if cat else line.amount
+        time_str = await _next_time_for_date(parent["project_id"], parent.get("bank_account_id"), parent["date"])
+        tx = Transaction(
+            project_id=parent["project_id"],
+            bank_account_id=parent.get("bank_account_id"),
+            date=parent["date"],
+            time=time_str,
+            description=line.description or f"{parent['description']} ({idx + 1}/{len(payload.splits)})",
+            amount=amount,
+            type=ttype,
+            category_id=line.category_id,
+            parent_transaction_id=parent["id"],
+            is_split=False,
+        )
+        doc = tx.model_dump()
+        doc["created_at"] = doc["created_at"].isoformat()
+        await db.transactions.insert_one(doc)
+        created.append(doc)
+
+    await db.transactions.update_one({"id": parent["id"]}, {"$set": {"is_split": True}})
+    for d in created:
+        if isinstance(d.get('created_at'), str):
+            d['created_at'] = datetime.fromisoformat(d['created_at'])
+    return created
+
+
+@router.delete("/transactions/{tx_id}/split")
+async def unsplit_transaction(tx_id: str):
+    """Remove every child split and flip the parent back to is_split=False."""
+    parent = await db.transactions.find_one({"id": tx_id}, {"_id": 0})
+    if not parent or not parent.get("is_split"):
+        raise HTTPException(status_code=400, detail="Transaction is not split")
+    await db.transactions.delete_many({"parent_transaction_id": tx_id})
+    await db.transactions.update_one({"id": tx_id}, {"$set": {"is_split": False}})
+    return {"ok": True}
+
+
+@router.get("/transactions/{tx_id}/splits", response_model=List[Transaction])
+async def list_splits(tx_id: str):
+    """Return the child split rows for a parent."""
+    docs = await db.transactions.find({"parent_transaction_id": tx_id}, {"_id": 0}).sort("created_at", 1).to_list(50)
+    for d in docs:
+        if isinstance(d.get("created_at"), str):
+            d["created_at"] = datetime.fromisoformat(d["created_at"])
     return docs
 
 

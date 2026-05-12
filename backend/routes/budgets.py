@@ -132,6 +132,8 @@ async def budgets_progress(project_id: str, year: int, month: Optional[int] = No
     txs = await db.transactions.find(
         {"project_id": project_id, "date": {"$regex": f"^{year:04d}"}}, {"_id": 0}
     ).to_list(100000)
+    # Skip split parents — children carry the spend.
+    txs = [t for t in txs if not t.get("is_split")]
     # spent[(category_id, ym)] = absolute spend for that category that month.
     spent_by_cat_month: Dict[tuple, float] = {}
     yearly_spent: Dict[str, float] = {}

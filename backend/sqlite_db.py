@@ -53,13 +53,16 @@ _SCHEMAS: Dict[str, Dict[str, Any]] = {
             ("description", "TEXT NOT NULL"),
             ("amount", "REAL NOT NULL"),
             ("category_id", "TEXT"),
+            ("parent_transaction_id", "TEXT"),
+            ("is_split", "INTEGER DEFAULT 0"),
             ("created_at", "TEXT NOT NULL"),
             ("data", "TEXT NOT NULL"),
         ],
         "indexed_fields": {
-            "id", "project_id", "bank_account_id", "date", "time", "description", "amount", "category_id", "created_at",
+            "id", "project_id", "bank_account_id", "date", "time", "description", "amount", "category_id",
+            "parent_transaction_id", "is_split", "created_at",
         },
-        "indexes": [("project_id", "date"), ("category_id",), ("bank_account_id",)],
+        "indexes": [("project_id", "date"), ("category_id",), ("bank_account_id",), ("parent_transaction_id",)],
     },
     "rules": {
         "columns": [

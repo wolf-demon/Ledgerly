@@ -55,6 +55,8 @@ class Transaction(BaseModel):
     amount: float
     type: str
     category_id: Optional[str] = None
+    parent_transaction_id: Optional[str] = None  # set on child split rows
+    is_split: bool = False                       # set on the original parent once split
     raw_row: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -63,6 +65,16 @@ class TransactionUpdate(BaseModel):
     category_id: Optional[str] = None
     description: Optional[str] = None
     apply_to_similar: bool = False
+
+
+class SplitLine(BaseModel):
+    amount: float                    # MUST share sign with the parent
+    category_id: Optional[str] = None
+    description: Optional[str] = None
+
+
+class SplitPayload(BaseModel):
+    splits: List[SplitLine]
 
 
 class BankAccount(BaseModel):

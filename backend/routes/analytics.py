@@ -32,6 +32,8 @@ async def analytics_yearly(project_id: str, year: int, bank_account_id: Optional
     if bank_account_id:
         tx_filter["bank_account_id"] = bank_account_id
     txs = await db.transactions.find(tx_filter, {"_id": 0}).to_list(50000)
+    # Exclude parents that have been split — their child rows already represent the spend.
+    txs = [t for t in txs if not t.get("is_split")]
 
     monthly_income = [0.0] * 12
     monthly_expense = [0.0] * 12
@@ -143,6 +145,8 @@ async def analytics_years(project_id: str):
 @router.get("/analytics/recurring")
 async def analytics_recurring(project_id: str, lookback_months: int = 6):
     txs = await db.transactions.find({"project_id": project_id}, {"_id": 0}).to_list(100000)
+    # Drop split parents — children represent the real spend.
+    txs = [t for t in txs if not t.get("is_split")]
     if not txs:
         return {"recurring": [], "forecast": {"monthly_total_expense": 0.0, "monthly_total_income": 0.0}}
 

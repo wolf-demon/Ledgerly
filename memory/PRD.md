@@ -127,6 +127,31 @@ N/A (no auth)
 - P2: In-app "Updates" banner driven by IPC bridge from `updater.js`
 - P2: Sync Dashboard BudgetSummary period with `/budgets` page selector (cosmetic)
 
+### Iteration 12 (2026-02-08) — Split transactions + AI-assisted detection
+
+**Why:** A single bank transaction (e.g. £80 supermarket = £50 groceries + £30 fuel) couldn't be attributed to multiple categories without inflating totals.
+
+**Backend:**
+- New `parent_transaction_id` + `is_split` columns on `transactions` (auto-migrated).
+- `SplitLine` + `SplitPayload` models.
+- `POST /api/transactions/{id}/split` — validates: ≥2 lines, sign matches parent, sum equals parent within £0.01. Sets parent `is_split=True`, creates children with `parent_transaction_id`, assigns sequential `time` per (project, account, date).
+- `DELETE /api/transactions/{id}/split` — un-split: deletes children, flips parent back to `is_split=False`.
+- `GET /api/transactions/{id}/splits` — list children for a parent.
+- `GET /api/transactions` excludes `is_split=true` parents by default; `?include_split_parents=true` opts back in.
+- `/api/analytics/yearly`, `/api/analytics/recurring`, `/api/budgets/progress` all filter out `is_split=true` parents so split children represent the spend without double-counting.
+- **AI-assisted:** new `POST /api/transactions/detect-splits` walks the user's transactions ≥£25, asks the configured LLM to flag those covering multiple categories, returns candidate `{transaction, splits[{category_id, category_name, category_known, amount, reason}], reason, auto_balanced, provider}`. Nothing mutated.
+
+**Frontend:**
+- New `SplitDialog` — manual editor with running "remaining" counter (green "Balanced" badge / red "Remaining: £X"), per-line balance-to button, add/remove lines, Save disabled until balanced + every line categorised.
+- New `SplitReviewDialog` — walks AI candidates **one at a time**. For each: shows merchant + amount + AI reasoning + suggested split lines + 4 buttons (Prev / Skip / Edit / Confirm). Confirm is disabled unless ≥2 of the suggested lines map to existing categories. "Edit before applying" pops the regular SplitDialog pre-seeded with AI lines so the user can edit before saving. Final toast: "X applied · Y skipped".
+- Transactions page: scissors split button per row, X unsplit button on parents, "Split into N" chip with line-through amount, expand arrow to reveal indented child rows inline, "Show split parent rows" toggle, "AI: detect splits" toolbar button.
+- `auto_balanced` flag surfaced from `detect_splits` — review dialog warns when the AI's last line was rounded.
+
+**Tests:**
+- New `/app/backend/tests/test_iteration12_splits.py` — 10 cases (happy path, all 5 validation errors, hidden-by-default + opt-in, unsplit, analytics excludes parent, budgets roll up from children only, detect-splits endpoint exists).
+- Result: **10/10 new + 105 regression = 115/116 passing** (1 pre-existing skip).
+- Frontend self-verified end-to-end: 20-row Nationwide PDF uploaded → scissors button visible on every row → click opens SplitDialog with parent pre-split into 2 lines, "Balanced" badge green, Save disabled until categories picked. AI button live in toolbar.
+
 ### Iteration 11 (2026-02-08) — Bank accounts, sub-categories, time-of-day, group-by, heatmap fix
 
 **Yearly Report color fix.** Monthly cell text now always renders dark (#1F2E1B) on a low-opacity tint (≤30%); fixes the unreadable numbers on lighter months.

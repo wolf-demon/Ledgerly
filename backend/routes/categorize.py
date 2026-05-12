@@ -1,10 +1,11 @@
-"""AI categorization endpoints: single suggest, bulk suggest, bulk categorize, reclassify."""
+"""AI categorization endpoints: single suggest, bulk suggest, bulk categorize, reclassify, split detection."""
 import json
 import logging
 import re
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from app_db import EMERGENT_LLM_KEY, db
 from models import (
@@ -22,6 +23,13 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 PALETTE = ["#364C2E", "#4B6B40", "#728A66", "#D96C4E", "#D1A77E", "#E3C8AA", "#8B5E3C", "#9E7B58"]
+
+
+class DetectSplitsPayload(BaseModel):
+    project_id: str
+    min_amount: float = 25.0   # Only inspect transactions whose abs(amount) is at least this much
+    max_items: int = 60        # Cost control — how many candidate transactions to ask the AI about
+    only_uncategorized: bool = False
 
 
 @router.post("/categorize/suggest")
@@ -309,3 +317,128 @@ async def reclassify_transactions(project_id: str = Query(...)):
             await db.transactions.update_one({"id": t["id"]}, {"$set": update})
             fixed += 1
     return {"checked": len(txs), "fixed": fixed}
+
+
+
+@router.post("/transactions/detect-splits")
+async def detect_splits(payload: DetectSplitsPayload):
+    """Use the configured AI provider to flag transactions that look like
+    they might span multiple categories (e.g. a £80 supermarket charge that's
+    really £50 groceries + £30 fuel).
+
+    Returns a list of *candidate suggestions* — nothing is mutated. The
+    frontend walks the user through each candidate so they confirm,
+    edit, or skip individually.
+    """
+    proj = await db.projects.find_one({"id": payload.project_id}, {"_id": 0})
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    settings = await get_settings()
+    provider = settings.ai_provider
+    if provider == "none":
+        raise HTTPException(status_code=400, detail="AI provider is disabled. Open Settings to enable Emergent or Ollama.")
+    emergent_key = (settings.emergent_key or "").strip() or EMERGENT_LLM_KEY
+    if provider == "emergent" and not emergent_key:
+        raise HTTPException(status_code=400, detail="No Emergent LLM key configured.")
+
+    cats = await db.categories.find({"project_id": payload.project_id}, {"_id": 0}).to_list(500)
+    cat_by_name = {c["name"].lower(): c for c in cats}
+    cat_list_str = "\n".join([f"- {c['name']} ({c['type']})" for c in cats]) or "(no categories yet)"
+
+    q: Dict[str, Any] = {"project_id": payload.project_id}
+    if payload.only_uncategorized:
+        q["category_id"] = None
+    raw = await db.transactions.find(q, {"_id": 0}).to_list(20000)
+    # Filter out: already-split parents, split children, and tiny transactions.
+    candidates = [
+        t for t in raw
+        if not t.get("is_split")
+        and not t.get("parent_transaction_id")
+        and abs(float(t.get("amount", 0))) >= payload.min_amount
+    ]
+    # Cap to control LLM cost.
+    candidates = sorted(candidates, key=lambda t: -abs(float(t["amount"])))[: payload.max_items]
+    if not candidates:
+        return {"checked": 0, "candidates": []}
+
+    sys_msg = (
+        "You are a personal finance assistant. Given a bank transaction (merchant + amount), "
+        "decide whether it likely covers MULTIPLE distinct spending categories. "
+        "Most bank transactions cover ONE category — only mark splits when the merchant is known "
+        "to mix categories (supermarkets selling fuel, hardware stores selling food, big-box retailers, "
+        "etc.). Provide 2 to 4 split lines. Each line is one category from the provided list. "
+        "Lines must sum exactly to the parent amount. Respond ONLY with strict JSON of the form: "
+        "{\"is_split\": true|false, \"splits\": [{\"category_name\": \"...\", \"amount\": <number>, "
+        "\"reason\": \"short\"}], \"reason\": \"why or why not\"}. "
+        "When is_split=false return an empty splits array."
+    )
+
+    async def _ask(tx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        user_text = (
+            f"Transaction: {tx['description']}\n"
+            f"Amount: {tx['amount']} GBP\n\n"
+            f"Available categories:\n{cat_list_str}\n\n"
+            "Return JSON only. Splits MUST sum exactly to the transaction amount."
+        )
+        try:
+            if provider == "ollama":
+                text = suggest_via_ollama(sys_msg, user_text, settings.ollama_url, settings.ollama_model)
+            else:
+                text = await suggest_via_emergent(sys_msg, user_text, emergent_key)
+            m = re.search(r'\{.*\}', text, re.DOTALL)
+            if not m:
+                return None
+            return json.loads(m.group(0))
+        except Exception as e:
+            logger.warning("split-detect failed for tx %s: %s", tx.get("id"), e)
+            return None
+
+    results: List[Dict[str, Any]] = []
+    for tx in candidates:
+        parsed = await _ask(tx)
+        if not parsed or not parsed.get("is_split"):
+            continue
+        raw_splits = parsed.get("splits") or []
+        # Resolve category_name -> existing category_id. Drop lines we can't match.
+        resolved = []
+        for s in raw_splits:
+            name = (s.get("category_name") or "").strip()
+            try:
+                amt = float(s.get("amount"))
+            except (TypeError, ValueError):
+                continue
+            cat = cat_by_name.get(name.lower())
+            resolved.append({
+                "category_id": cat["id"] if cat else None,
+                "category_name": cat["name"] if cat else name,
+                "category_known": bool(cat),
+                "amount": round(amt, 2),
+                "reason": s.get("reason", ""),
+            })
+        if len(resolved) < 2:
+            continue
+        # Validate the sum (within £0.01).
+        total = sum(r["amount"] for r in resolved)
+        auto_balanced = False
+        if abs(total - float(tx["amount"])) > 0.01:
+            # Try to re-balance the last line so we don't waste the suggestion.
+            diff = round(float(tx["amount"]) - total, 2)
+            resolved[-1]["amount"] = round(resolved[-1]["amount"] + diff, 2)
+            total = sum(r["amount"] for r in resolved)
+            if abs(total - float(tx["amount"])) > 0.01:
+                continue
+            auto_balanced = True
+        results.append({
+            "transaction": {
+                "id": tx["id"], "date": tx["date"], "description": tx["description"],
+                "amount": tx["amount"], "bank_account_id": tx.get("bank_account_id"),
+                "category_id": tx.get("category_id"),
+            },
+            "splits": resolved,
+            "reason": parsed.get("reason", ""),
+            "auto_balanced": auto_balanced,
+            "provider": provider,
+        })
+
+    return {"checked": len(candidates), "candidates": results}

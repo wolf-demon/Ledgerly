@@ -11,8 +11,10 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuLabel, DropdownMenuSeparator,
 } from "../components/ui/dropdown-menu";
-import { Tag, Search, Trash2, Sparkles, Upload as UploadIcon, Download, Wand2, X, RefreshCw, Bot, Loader2 } from "lucide-react";
+import { Tag, Search, Trash2, Sparkles, Upload as UploadIcon, Download, Wand2, X, RefreshCw, Bot, Loader2, Scissors, ChevronDown, ChevronRight } from "lucide-react";
 import CategorizeDialog from "../components/CategorizeDialog";
+import SplitDialog from "../components/SplitDialog";
+import SplitReviewDialog from "../components/SplitReviewDialog";
 import { useConfirm } from "../components/ConfirmDialog";
 import { toast } from "sonner";
 
@@ -65,9 +67,15 @@ export default function Transactions() {
   const [groupMode, setGroupMode] = useState("flat"); // flat | day | week | month
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [splitChildrenByParent, setSplitChildrenByParent] = useState({});
+  const [showSplitParents, setShowSplitParents] = useState(false);
+  const [expandedParents, setExpandedParents] = useState(new Set());
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(false);
+  const [splitTarget, setSplitTarget] = useState(null);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [aiSplitOpen, setAiSplitOpen] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [bulkApplyRule, setBulkApplyRule] = useState(true);
   const [autoBusy, setAutoBusy] = useState(false);
@@ -78,7 +86,7 @@ export default function Transactions() {
     if (!active) return;
     setLoading(true);
     try {
-      const params = { project_id: active.id, limit: 5000 };
+      const params = { project_id: active.id, limit: 5000, include_split_parents: showSplitParents };
       if (filter === "uncategorized") params.uncategorized = true;
       if (bankAccountId) params.bank_account_id = bankAccountId;
       const [t, c] = await Promise.all([
@@ -88,10 +96,21 @@ export default function Transactions() {
       setTransactions(t.data);
       setCategories(c.data);
       setSelected(new Set());
+
+      // Build a quick "split parent id -> [children]" map for indenting.
+      const map = {};
+      for (const tx of t.data) {
+        const pid = tx.parent_transaction_id;
+        if (pid) {
+          if (!map[pid]) map[pid] = [];
+          map[pid].push(tx);
+        }
+      }
+      setSplitChildrenByParent(map);
     } finally {
       setLoading(false);
     }
-  }, [active, filter, bankAccountId]);
+  }, [active, filter, bankAccountId, showSplitParents]);
 
   useEffect(() => {
     load();
@@ -148,6 +167,32 @@ export default function Transactions() {
     await api.delete(`/transactions/${id}`);
     toast.success("Deleted");
     load();
+  };
+
+  const startSplit = (t) => {
+    setSplitTarget(t);
+    setSplitOpen(true);
+  };
+
+  const unsplit = async (t) => {
+    if (!(await confirm({
+      title: "Remove split?",
+      body: "All child split lines will be deleted and the original transaction will reappear in your totals.",
+      destructive: true,
+    }))) return;
+    try {
+      await api.delete(`/transactions/${t.id}/split`);
+      toast.success("Split removed");
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not un-split");
+    }
+  };
+
+  const toggleParentExpanded = (id) => {
+    const next = new Set(expandedParents);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setExpandedParents(next);
   };
 
   const bulkCategorize = async (categoryId) => {
@@ -232,75 +277,137 @@ export default function Transactions() {
     }
   };
 
-  const renderRow = (t) => {
+  const renderRow = (t, opts = {}) => {
+    const { indent = false } = opts;
     const cat = catMap[t.category_id];
     const acct = t.bank_account_id ? accountMap[t.bank_account_id] : null;
     const isSel = selected.has(t.id);
     const showTime = t.time && t.time !== "00:00:00";
+    const isSplitParent = !!t.is_split;
+    const children = splitChildrenByParent[t.id] || [];
+    const isExpanded = expandedParents.has(t.id);
     return (
-      <tr
-        key={t.id}
-        className={`border-b border-[#EAE3D9]/50 transition-colors ${isSel ? "bg-[#F4EBE1]/50" : "hover:bg-[#F4EBE1]/30"}`}
-      >
-        <td className="py-3 px-4">
-          <Checkbox checked={isSel} onCheckedChange={() => toggle(t.id)} data-testid={`select-tx-${t.id}`} />
-        </td>
-        <td className="py-3 px-4 text-[#656C5A] whitespace-nowrap text-xs">
-          <div>{t.date}</div>
-          {showTime && <div className="text-[10px] opacity-70 tabular-nums">{t.time.slice(0, 5)}</div>}
-        </td>
-        <td className="py-3 px-4">
-          {acct ? (
-            <span
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium"
-              style={{ backgroundColor: `${acct.color}1A`, color: acct.color }}
-              title={acct.sort_code || ""}
-            >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: acct.color }} />
-              {acct.name}
-            </span>
-          ) : (
-            <span className="inline-block text-xs text-[#656C5A]">—</span>
-          )}
-        </td>
-        <td className="py-3 px-4 max-w-md truncate" title={t.description}>{t.description}</td>
-        <td className="py-3 px-4">
-          {cat ? (
-            <span
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium"
-              style={{ backgroundColor: `${cat.color}1A`, color: cat.color }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cat.color }} />
-              {cat.name}
-            </span>
-          ) : (
-            <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-[#F4EBE1] text-[#656C5A]">
-              Uncategorized
-            </span>
-          )}
-        </td>
-        <td className={`py-3 px-4 text-right font-medium whitespace-nowrap ${t.amount >= 0 ? "text-[#4B6B40]" : "text-[#D96C4E]"}`}>
-          {formatGBP(t.amount)}
-        </td>
-        <td className="py-3 px-4 text-right">
-          <div className="flex items-center justify-end gap-1">
-            <Button
-              size="sm" variant="ghost" data-testid={`categorize-btn-${t.id}`}
-              onClick={() => { setEditing(t); setOpen(true); }}
-              className="hover:bg-[#F4EBE1]"
-            >
-              <Tag className="w-4 h-4" />
-            </Button>
-            <Button
-              size="sm" variant="ghost" data-testid={`delete-tx-btn-${t.id}`}
-              onClick={() => remove(t.id)}
-              className="hover:bg-[#D96C4E]/10 text-[#D96C4E]"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </td>
-      </tr>
+      <React.Fragment key={t.id}>
+        <tr
+          className={`border-b border-[#EAE3D9]/50 transition-colors ${
+            isSel ? "bg-[#F4EBE1]/50" : isSplitParent ? "bg-[#F4EBE1]/20 opacity-80" : "hover:bg-[#F4EBE1]/30"
+          } ${indent ? "bg-[#FAF7F2]" : ""}`}
+        >
+          <td className="py-3 px-4">
+            {!indent && (
+              <Checkbox checked={isSel} onCheckedChange={() => toggle(t.id)} data-testid={`select-tx-${t.id}`} />
+            )}
+          </td>
+          <td className="py-3 px-4 text-[#656C5A] whitespace-nowrap text-xs">
+            <div className="flex items-center gap-1">
+              {indent && <span className="text-[#9E988C] mr-1">↳</span>}
+              {isSplitParent && (
+                <button
+                  type="button"
+                  onClick={() => toggleParentExpanded(t.id)}
+                  className="text-[#656C5A] hover:text-[#1F2E1B]"
+                  data-testid={`toggle-split-${t.id}`}
+                >
+                  {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                </button>
+              )}
+              <span>{t.date}</span>
+            </div>
+            {showTime && <div className="text-[10px] opacity-70 tabular-nums ml-3">{t.time.slice(0, 5)}</div>}
+          </td>
+          <td className="py-3 px-4">
+            {acct ? (
+              <span
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium"
+                style={{ backgroundColor: `${acct.color}1A`, color: acct.color }}
+                title={acct.sort_code || ""}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: acct.color }} />
+                {acct.name}
+              </span>
+            ) : (
+              <span className="inline-block text-xs text-[#656C5A]">—</span>
+            )}
+          </td>
+          <td className="py-3 px-4 max-w-md truncate" title={t.description}>
+            <span className={indent ? "text-sm" : ""}>{t.description}</span>
+            {isSplitParent && (
+              <span
+                className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-[#728A66]/15 text-[#728A66]"
+                data-testid={`split-chip-${t.id}`}
+              >
+                <Scissors className="w-3 h-3" /> Split into {children.length || "…"}
+              </span>
+            )}
+          </td>
+          <td className="py-3 px-4">
+            {cat ? (
+              <span
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium"
+                style={{ backgroundColor: `${cat.color}1A`, color: cat.color }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                {cat.name}
+              </span>
+            ) : isSplitParent ? (
+              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-[#728A66]/15 text-[#728A66]">
+                Split parent
+              </span>
+            ) : (
+              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-[#F4EBE1] text-[#656C5A]">
+                Uncategorized
+              </span>
+            )}
+          </td>
+          <td className={`py-3 px-4 text-right font-medium whitespace-nowrap ${
+            isSplitParent ? "text-[#656C5A] line-through" : (t.amount >= 0 ? "text-[#4B6B40]" : "text-[#D96C4E]")
+          }`}>
+            {formatGBP(t.amount)}
+          </td>
+          <td className="py-3 px-4 text-right">
+            <div className="flex items-center justify-end gap-1">
+              {!isSplitParent && !indent && (
+                <Button
+                  size="sm" variant="ghost" data-testid={`split-btn-${t.id}`}
+                  onClick={() => startSplit(t)}
+                  className="hover:bg-[#F4EBE1]"
+                  title="Split into multiple categories"
+                >
+                  <Scissors className="w-4 h-4" />
+                </Button>
+              )}
+              {isSplitParent && (
+                <Button
+                  size="sm" variant="ghost" data-testid={`unsplit-btn-${t.id}`}
+                  onClick={() => unsplit(t)}
+                  className="hover:bg-[#D96C4E]/10 text-[#D96C4E]"
+                  title="Remove split"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+              {!isSplitParent && (
+                <Button
+                  size="sm" variant="ghost" data-testid={`categorize-btn-${t.id}`}
+                  onClick={() => { setEditing(t); setOpen(true); }}
+                  className="hover:bg-[#F4EBE1]"
+                >
+                  <Tag className="w-4 h-4" />
+                </Button>
+              )}
+              <Button
+                size="sm" variant="ghost" data-testid={`delete-tx-btn-${t.id}`}
+                onClick={() => remove(t.id)}
+                className="hover:bg-[#D96C4E]/10 text-[#D96C4E]"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </td>
+        </tr>
+        {/* Inline expansion of a split parent's children when toggled on. */}
+        {isSplitParent && isExpanded && children.map((child) => renderRow(child, { indent: true }))}
+      </React.Fragment>
     );
   };
 
@@ -325,6 +432,15 @@ export default function Transactions() {
             ) : (
               <><Bot className="w-4 h-4 mr-2" /> Auto-categorize with AI</>
             )}
+          </Button>
+          <Button
+            onClick={() => setAiSplitOpen(true)}
+            data-testid="ai-split-btn"
+            variant="outline"
+            className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
+            title="Use AI to suggest splits for multi-category transactions"
+          >
+            <Scissors className="w-4 h-4 mr-2" /> AI: detect splits
           </Button>
           <Button
             onClick={reclassify} variant="outline" data-testid="reclassify-btn"
@@ -489,9 +605,29 @@ export default function Transactions() {
         categories={categories} projectId={active.id} onSaved={load}
       />
 
-      <p className="text-xs text-[#656C5A] flex items-center gap-1.5">
-        <Sparkles className="w-3.5 h-3.5" /> Tip: select multiple rows to categorize them at once. Use Group by to spot inconsistencies.
-      </p>
+      <SplitDialog
+        open={splitOpen} onOpenChange={setSplitOpen} transaction={splitTarget}
+        categories={categories} onSaved={load}
+      />
+
+      <SplitReviewDialog
+        open={aiSplitOpen} onOpenChange={setAiSplitOpen}
+        projectId={active.id} categories={categories} onSaved={load}
+      />
+
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <p className="text-xs text-[#656C5A] flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5" /> Tip: split, categorize, group — and use the AI buttons to do it in bulk.
+        </p>
+        <label className="text-xs text-[#656C5A] flex items-center gap-2 cursor-pointer">
+          <Checkbox
+            checked={showSplitParents}
+            onCheckedChange={(v) => setShowSplitParents(!!v)}
+            data-testid="show-split-parents-toggle"
+          />
+          Show split parent rows
+        </label>
+      </div>
     </div>
   );
 }
