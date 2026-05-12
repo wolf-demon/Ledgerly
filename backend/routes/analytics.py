@@ -1,7 +1,7 @@
 """Analytics endpoints: yearly summary, category drilldown, available years, recurring detector."""
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
 
@@ -12,12 +12,26 @@ router = APIRouter()
 
 
 @router.get("/analytics/yearly")
-async def analytics_yearly(project_id: str, year: int):
+async def analytics_yearly(project_id: str, year: int, bank_account_id: Optional[str] = None):
     cats = await db.categories.find({"project_id": project_id}, {"_id": 0}).to_list(500)
     cat_map = {c["id"]: c for c in cats}
-    txs = await db.transactions.find(
-        {"project_id": project_id, "date": {"$regex": f"^{year:04d}"}}, {"_id": 0}
-    ).to_list(50000)
+    # Build a parent->name resolver. If a category has a parent, roll its
+    # amounts up under the parent for the headline breakdown.
+    def root_of(cid: str) -> str:
+        seen = set()
+        cur = cid
+        while cur and cur not in seen:
+            seen.add(cur)
+            c = cat_map.get(cur)
+            if not c or not c.get("parent_id"):
+                return cur
+            cur = c["parent_id"]
+        return cid
+
+    tx_filter: Dict[str, Any] = {"project_id": project_id, "date": {"$regex": f"^{year:04d}"}}
+    if bank_account_id:
+        tx_filter["bank_account_id"] = bank_account_id
+    txs = await db.transactions.find(tx_filter, {"_id": 0}).to_list(50000)
 
     monthly_income = [0.0] * 12
     monthly_expense = [0.0] * 12
@@ -39,7 +53,7 @@ async def analytics_yearly(project_id: str, year: int):
         else:
             monthly_expense[m] += abs(amt)
         if t.get("category_id"):
-            cid = t["category_id"]
+            cid = root_of(t["category_id"])  # roll-up to parent for the headline view
         else:
             cid = "__uncat_income__" if amt >= 0 else "__uncat_expense__"
         if cid not in cat_monthly:

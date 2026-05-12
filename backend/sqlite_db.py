@@ -36,17 +36,20 @@ _SCHEMAS: Dict[str, Dict[str, Any]] = {
         "columns": [
             ("id", "TEXT PRIMARY KEY"),
             ("project_id", "TEXT NOT NULL"),
+            ("parent_id", "TEXT"),
             ("created_at", "TEXT NOT NULL"),
             ("data", "TEXT NOT NULL"),
         ],
-        "indexed_fields": {"id", "project_id", "created_at"},
-        "indexes": [("project_id",)],
+        "indexed_fields": {"id", "project_id", "parent_id", "created_at"},
+        "indexes": [("project_id",), ("parent_id",)],
     },
     "transactions": {
         "columns": [
             ("id", "TEXT PRIMARY KEY"),
             ("project_id", "TEXT NOT NULL"),
+            ("bank_account_id", "TEXT"),
             ("date", "TEXT NOT NULL"),
+            ("time", "TEXT"),
             ("description", "TEXT NOT NULL"),
             ("amount", "REAL NOT NULL"),
             ("category_id", "TEXT"),
@@ -54,9 +57,9 @@ _SCHEMAS: Dict[str, Dict[str, Any]] = {
             ("data", "TEXT NOT NULL"),
         ],
         "indexed_fields": {
-            "id", "project_id", "date", "description", "amount", "category_id", "created_at",
+            "id", "project_id", "bank_account_id", "date", "time", "description", "amount", "category_id", "created_at",
         },
-        "indexes": [("project_id", "date"), ("category_id",)],
+        "indexes": [("project_id", "date"), ("category_id",), ("bank_account_id",)],
     },
     "rules": {
         "columns": [
@@ -91,6 +94,20 @@ _SCHEMAS: Dict[str, Dict[str, Any]] = {
         ],
         "indexed_fields": {"id", "project_id", "category_id", "period", "amount", "rollover", "created_at"},
         "indexes": [("project_id", "category_id")],
+    },
+    "bank_accounts": {
+        "columns": [
+            ("id", "TEXT PRIMARY KEY"),
+            ("project_id", "TEXT NOT NULL"),
+            ("name", "TEXT NOT NULL"),
+            ("sort_code", "TEXT"),
+            ("account_number", "TEXT"),
+            ("color", "TEXT"),
+            ("created_at", "TEXT NOT NULL"),
+            ("data", "TEXT NOT NULL"),
+        ],
+        "indexed_fields": {"id", "project_id", "name", "sort_code", "account_number", "color", "created_at"},
+        "indexes": [("project_id",)],
     },
 }
 
@@ -370,6 +387,17 @@ class SQLiteDB:
         for table, schema in _SCHEMAS.items():
             cols_sql = ", ".join(f"{name} {coltype}" for name, coltype in schema["columns"])
             await self._conn.execute(f"CREATE TABLE IF NOT EXISTS {table} ({cols_sql})")
+            # Migrate older DBs: add any new columns the schema introduced.
+            cur = await self._conn.execute(f"PRAGMA table_info({table})")
+            existing_cols = {row[1] for row in await cur.fetchall()}
+            await cur.close()
+            for name, coltype in schema["columns"]:
+                if name not in existing_cols:
+                    # ALTER TABLE in SQLite forbids NOT NULL with non-constant default;
+                    # strip the NOT NULL clause for the migration only — the wrapper
+                    # always writes a value so this is safe.
+                    safe_type = coltype.replace("NOT NULL", "").replace("PRIMARY KEY", "").strip()
+                    await self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {safe_type}")
             for idx in schema.get("indexes", []):
                 idx_name = f"idx_{table}_{'_'.join(idx)}"
                 await self._conn.execute(

@@ -53,4 +53,5 @@ async def delete_project(project_id: str):
     await db.transactions.delete_many({"project_id": project_id})
     await db.rules.delete_many({"project_id": project_id})
     await db.budgets.delete_many({"project_id": project_id})
+    await db.bank_accounts.delete_many({"project_id": project_id})
     return {"ok": True}

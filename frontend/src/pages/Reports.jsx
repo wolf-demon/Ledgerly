@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useProject } from "../lib/projectContext";
+import { useBankAccount } from "../lib/bankAccountContext";
 import api, { formatGBP, MONTHS } from "../lib/api";
 import { Card } from "../components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 
 export default function Reports() {
   const { active } = useProject();
+  const { selectedId: bankAccountId } = useBankAccount();
   const [years, setYears] = useState([new Date().getFullYear()]);
   const [year, setYear] = useState(new Date().getFullYear());
   const [data, setData] = useState(null);
@@ -18,9 +20,11 @@ export default function Reports() {
     setYears(yrs.data.years);
     const useYear = yrs.data.years.includes(year) ? year : yrs.data.years[0];
     if (useYear !== year) setYear(useYear);
-    const res = await api.get("/analytics/yearly", { params: { project_id: active.id, year: useYear } });
+    const params = { project_id: active.id, year: useYear };
+    if (bankAccountId) params.bank_account_id = bankAccountId;
+    const res = await api.get("/analytics/yearly", { params });
     setData(res.data);
-  }, [active, year]);
+  }, [active, year, bankAccountId]);
 
   useEffect(() => {
     load();
@@ -81,10 +85,10 @@ export default function Reports() {
               {c.monthly.map((v, i) => (
                 <td key={i} className="text-center px-1 py-2">
                   <div
-                    className="rounded px-1 py-1 text-xs heatmap-cell"
+                    className="rounded px-1.5 py-1.5 text-xs font-semibold heatmap-cell"
                     style={{
                       ...cellShade(v, c.color),
-                      color: Math.abs(v) / maxVal > 0.4 ? "#FFFFFF" : "#1F2E1B",
+                      color: "#1F2E1B",
                     }}
                     title={`${MONTHS[i]} ${year}: ${formatGBP(v)}`}
                   >

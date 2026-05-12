@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 11 — full verification of the multi-feature drop (bank accounts schema + CRUD + auto-detect from PDF sort code, per-tx time-of-day, Transactions group-by Day/Week/Month/None, one-level sub-categories with budget roll-up, global bank filter pill). Created /app/backend/tests/test_iteration11_bank_subcat.py with 15 pytest cases — all pass. Full backend regression across iter2/5/6/7/8/10/11: 105 passed, 1 skipped, 0 failed. Frontend e2e (Playwright against the public REACT_APP_BACKEND_URL) seeded a fresh project with both Nationwide and Bank of Scotland PDFs and validated all 19 user-visible checkpoints: bank-filter-trigger appears when accounts exist (and bank-filter-empty when not), dropdown renders bank-filter-all + bank-filter-<id> radio items, choosing 'Nationwide' persists across navigation and into localStorage ('ledgerly.bankFilter:<pid>'), Transactions table renders the expected 7 columns (Date/Time, Account, Description, Category, Amount, Actions) with time-of-day visible (HH:MM under the date), group-day/week/month/flat buttons present and group-day adds period header rows, switching to 'All accounts' restores all transactions (20→90 rows confirmed), Categories page renders parent rows with 'add-sub-<id>' buttons, the New Category dialog exposes a 'Parent category' select (data-testid='category-parent-select'), and the yearly Reports heatmap shows £ amounts in each month cell. All test data cleaned up post-run.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Reports / Yearly heatmap", "issues": ["Spec calls for monthly £ cell text at color #1F2E1B (very dark olive). Actual computed color is rgb(75,107,64) = #4B6B40 (the brand mid-olive). Still readable on the dark-tinted top month (Jan £1,899.24) but visibly low-contrast on the lighter Feb/Mar tinted cells — see attached screenshot. Either the inline color was not actually forced to #1F2E1B, or it is being overridden by a parent class. Worth eyeballing the produced cellShade()/text color in Reports.jsx."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration11_bank_subcat.py",
+    "/app/test_reports/pytest/iteration_11.xml"
+  ],
+  "action_items": [
+    "Minor: confirm the yearly-heatmap monthly cell text color actually resolves to #1F2E1B (currently rgb(75,107,64)). On lighter-tint cells (Feb/Mar) contrast feels too thin."
+  ],
+  "critical_code_review_comments": [
+    "routes/bank_accounts.py: duplicate check uses (project_id, sort_code, account_number) — good. But sort_code is normalised before existence check while incoming account_number is not normalised; if a user passes leading zeros / spaces in account_number this could miss-match. Low impact, worth a strip().",
+    "routes/categories.py update_category line 47: the second filter is computed using `payload.model_fields_set`, but the comprehension expression `k == 'parent_id' and 'parent_id' in payload.model_fields_set` is bound by Python operator precedence in a way that works but is hard to read. Suggest rewriting for clarity.",
+    "routes/budgets.py budgets_progress: roll-up walks parents with `guard < 5`, fine for the spec's one-level rule (max depth is 1). Code is future-proofed but the depth guard comment could note the current schema is hard-capped at 1.",
+    "routes/transactions.py _next_time_for_date: returns formatted HH:MM:SS based on max existing time per (project, account, date). Good. Returned in DESC order by date by the listing endpoint, so frontend that 'sorts by time within date' should ensure ascending sort — verified visually on /transactions.",
+    "Frontend BankAccountFilter.jsx: when accounts.length===0 we return the static 'No accounts yet' pill — good. When the previously-selected account is deleted, useBankAccount cleans up correctly (selectedId resolves to null via 'selected' lookup miss).",
+    "Reports.jsx: spec says text color is hard-forced to #1F2E1B but live DOM shows rgb(75,107,64). Either the inline style is being clobbered by a parent class or the color literal in cellShade() differs from the spec — needs a quick check."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration11_bank_subcat.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 new + 105 passed / 1 skipped on full regression)",
+    "frontend": "100% (19/19 e2e checkpoints)"
+  },
+  "test_credentials": "N/A — no auth in this app",
+  "seed_data_creation": "Backend tests create per-test TEST_Iter11_* projects (cleaned up via class fixture teardown which also exercises project-cascade-deletes-bank-accounts). Frontend e2e creates an E2E_Iter11_<ts> project, populates it via PDF upload, runs the checks, then deletes the project. Environment is clean post-run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New testids in active use this iteration: bank-filter-trigger, bank-filter-empty, bank-filter-all, bank-filter-<account_id>, group-day, group-week, group-month, group-flat, add-sub-<category_id>, category-parent-select. Active project localStorage key is 'activeProjectId' (NOT 'ledgerly.activeProjectId'). Per-project bank filter key is 'ledgerly.bankFilter:<project_id>'. Both bos_jan2026.pdf and nationwide_mar2026.pdf auto-detect cleanly; uploading either a second time hits the 'reuse existing account' path (auto_detected=true, created=false). The yearly analytics response shape is { monthly_income[12], monthly_expense[12], categories[], net } — no 'months' key.",
+  "rca of the issue": "Not applicable for backend/frontend functional checks. Only a low-priority design observation about heatmap text color contrast (see frontend_issues.design_issues) — likely a class precedence issue in Reports.jsx where an outer text-color class is winning over the inline #1F2E1B style."
+}

@@ -114,6 +114,12 @@ async def budgets_progress(project_id: str, year: int, month: Optional[int] = No
     """
     cats = await db.categories.find({"project_id": project_id}, {"_id": 0}).to_list(500)
     cat_map = {c["id"]: c for c in cats}
+    # Build child_ids[parent_id] = [child_ids...] so we can roll up sub-categories.
+    children_of: Dict[str, List[str]] = {}
+    for c in cats:
+        pid = c.get("parent_id")
+        if pid:
+            children_of.setdefault(pid, []).append(c["id"])
     budgets = await db.budgets.find({"project_id": project_id}, {"_id": 0}).to_list(2000)
     if not budgets:
         return {"year": year, "month": month, "items": []}
@@ -139,10 +145,18 @@ async def budgets_progress(project_id: str, year: int, month: Optional[int] = No
             continue
         cat_type = cat_map[cid]["type"]
         signed = _signed_spent(float(t["amount"]), cat_type)
-        spent_by_cat_month[(cid, m)] = spent_by_cat_month.get((cid, m), 0) + signed
-        # Yearly: only count months up to and including the requested month
-        if m <= month:
-            yearly_spent[cid] = yearly_spent.get(cid, 0) + signed
+        # Roll up: a transaction's spend counts toward its own category AND each ancestor.
+        targets = [cid]
+        cur = cat_map[cid].get("parent_id")
+        guard = 0
+        while cur and cur in cat_map and guard < 5:
+            targets.append(cur)
+            cur = cat_map[cur].get("parent_id")
+            guard += 1
+        for tid in targets:
+            spent_by_cat_month[(tid, m)] = spent_by_cat_month.get((tid, m), 0) + signed
+            if m <= month:
+                yearly_spent[tid] = yearly_spent.get(tid, 0) + signed
 
     # Prior-year tx (only needed for monthly rollover that crosses Jan boundary).
     # We walk back at most 11 months, so peek at last year if needed.

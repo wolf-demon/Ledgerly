@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { useProject } from "../lib/projectContext";
+import { useBankAccount } from "../lib/bankAccountContext";
 import api, { formatGBP, API } from "../lib/api";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -15,14 +16,53 @@ import CategorizeDialog from "../components/CategorizeDialog";
 import { useConfirm } from "../components/ConfirmDialog";
 import { toast } from "sonner";
 
+// Convert an ISO date "YYYY-MM-DD" into a JS Date with no timezone surprise.
+function toDate(iso) { return new Date(iso + "T00:00:00"); }
+
+// Return "YYYY-Www" for the ISO week the date belongs to. Used for the
+// week-grouping mode.
+function isoWeek(d) {
+  const date = new Date(d.valueOf());
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  const num = 1 + Math.round(((date - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+  return `${date.getFullYear()}-W${String(num).padStart(2, "0")}`;
+}
+
+function groupKey(t, mode) {
+  if (mode === "flat") return null;
+  const d = toDate(t.date);
+  if (mode === "day") return t.date;
+  if (mode === "week") return isoWeek(d);
+  if (mode === "month") return t.date.slice(0, 7);
+  return null;
+}
+
+function groupLabel(key, mode) {
+  if (mode === "day") {
+    return toDate(key).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  }
+  if (mode === "week") {
+    return `Week ${key.split("-W")[1]}, ${key.split("-W")[0]}`;
+  }
+  if (mode === "month") {
+    const [y, m] = key.split("-");
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+  return key;
+}
+
 export default function Transactions() {
   const { active } = useProject();
+  const { accounts, selectedId: bankAccountId } = useBankAccount();
   const confirm = useConfirm();
   const [params] = useSearchParams();
   const initialFilter = params.get("filter") || "all";
 
   const [filter, setFilter] = useState(initialFilter);
   const [search, setSearch] = useState("");
+  const [groupMode, setGroupMode] = useState("flat"); // flat | day | week | month
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -32,12 +72,15 @@ export default function Transactions() {
   const [bulkApplyRule, setBulkApplyRule] = useState(true);
   const [autoBusy, setAutoBusy] = useState(false);
 
+  const accountMap = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts]);
+
   const load = useCallback(async () => {
     if (!active) return;
     setLoading(true);
     try {
       const params = { project_id: active.id, limit: 5000 };
       if (filter === "uncategorized") params.uncategorized = true;
+      if (bankAccountId) params.bank_account_id = bankAccountId;
       const [t, c] = await Promise.all([
         api.get("/transactions", { params }),
         api.get("/categories", { params: { project_id: active.id } }),
@@ -48,20 +91,40 @@ export default function Transactions() {
     } finally {
       setLoading(false);
     }
-  }, [active, filter]);
+  }, [active, filter, bankAccountId]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  const catMap = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c])), [categories]);
+  const filtered = useMemo(
+    () => transactions.filter((t) => (!search ? true : t.description.toLowerCase().includes(search.toLowerCase()))),
+    [transactions, search],
+  );
+
+  // Build [{ key, label, rows, net }] for the chosen group mode.
+  const groups = useMemo(() => {
+    if (groupMode === "flat") return [{ key: "__all__", label: null, rows: filtered, net: 0 }];
+    const map = new Map();
+    for (const t of filtered) {
+      const k = groupKey(t, groupMode);
+      if (!map.has(k)) map.set(k, []);
+      map.get(k).push(t);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => (a < b ? 1 : -1))
+      .map(([key, rows]) => ({
+        key,
+        label: groupLabel(key, groupMode),
+        rows,
+        net: rows.reduce((s, t) => s + Number(t.amount), 0),
+      }));
+  }, [filtered, groupMode]);
+
   if (!active) {
     return <div className="text-[#656C5A]">Create or select a project first.</div>;
   }
-
-  const catMap = Object.fromEntries(categories.map((c) => [c.id, c]));
-  const filtered = transactions.filter((t) =>
-    !search ? true : t.description.toLowerCase().includes(search.toLowerCase())
-  );
 
   const allSelected = filtered.length > 0 && filtered.every((t) => selected.has(t.id));
   const someSelected = selected.size > 0 && !allSelected;
@@ -169,6 +232,78 @@ export default function Transactions() {
     }
   };
 
+  const renderRow = (t) => {
+    const cat = catMap[t.category_id];
+    const acct = t.bank_account_id ? accountMap[t.bank_account_id] : null;
+    const isSel = selected.has(t.id);
+    const showTime = t.time && t.time !== "00:00:00";
+    return (
+      <tr
+        key={t.id}
+        className={`border-b border-[#EAE3D9]/50 transition-colors ${isSel ? "bg-[#F4EBE1]/50" : "hover:bg-[#F4EBE1]/30"}`}
+      >
+        <td className="py-3 px-4">
+          <Checkbox checked={isSel} onCheckedChange={() => toggle(t.id)} data-testid={`select-tx-${t.id}`} />
+        </td>
+        <td className="py-3 px-4 text-[#656C5A] whitespace-nowrap text-xs">
+          <div>{t.date}</div>
+          {showTime && <div className="text-[10px] opacity-70 tabular-nums">{t.time.slice(0, 5)}</div>}
+        </td>
+        <td className="py-3 px-4">
+          {acct ? (
+            <span
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium"
+              style={{ backgroundColor: `${acct.color}1A`, color: acct.color }}
+              title={acct.sort_code || ""}
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: acct.color }} />
+              {acct.name}
+            </span>
+          ) : (
+            <span className="inline-block text-xs text-[#656C5A]">—</span>
+          )}
+        </td>
+        <td className="py-3 px-4 max-w-md truncate" title={t.description}>{t.description}</td>
+        <td className="py-3 px-4">
+          {cat ? (
+            <span
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium"
+              style={{ backgroundColor: `${cat.color}1A`, color: cat.color }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cat.color }} />
+              {cat.name}
+            </span>
+          ) : (
+            <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-[#F4EBE1] text-[#656C5A]">
+              Uncategorized
+            </span>
+          )}
+        </td>
+        <td className={`py-3 px-4 text-right font-medium whitespace-nowrap ${t.amount >= 0 ? "text-[#4B6B40]" : "text-[#D96C4E]"}`}>
+          {formatGBP(t.amount)}
+        </td>
+        <td className="py-3 px-4 text-right">
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              size="sm" variant="ghost" data-testid={`categorize-btn-${t.id}`}
+              onClick={() => { setEditing(t); setOpen(true); }}
+              className="hover:bg-[#F4EBE1]"
+            >
+              <Tag className="w-4 h-4" />
+            </Button>
+            <Button
+              size="sm" variant="ghost" data-testid={`delete-tx-btn-${t.id}`}
+              onClick={() => remove(t.id)}
+              className="hover:bg-[#D96C4E]/10 text-[#D96C4E]"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4 flex-wrap">
@@ -178,7 +313,7 @@ export default function Transactions() {
             Transactions
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             onClick={autoCategorize}
             disabled={autoBusy}
@@ -192,20 +327,13 @@ export default function Transactions() {
             )}
           </Button>
           <Button
-            onClick={reclassify}
-            variant="outline"
-            data-testid="reclassify-btn"
+            onClick={reclassify} variant="outline" data-testid="reclassify-btn"
             className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
             title="Recompute income/expense type from each transaction's amount sign"
           >
             <RefreshCw className="w-4 h-4 mr-2" /> Re-classify
           </Button>
-          <Button
-            onClick={exportCSV}
-            variant="outline"
-            data-testid="export-csv-btn"
-            className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
-          >
+          <Button onClick={exportCSV} variant="outline" data-testid="export-csv-btn" className="border-[#EAE3D9] hover:bg-[#F4EBE1]">
             <Download className="w-4 h-4 mr-2" /> Export CSV
           </Button>
         </div>
@@ -213,17 +341,32 @@ export default function Transactions() {
 
       <Card className="p-4 bg-white border-[#EAE3D9] shadow-none">
         <div className="flex flex-wrap gap-3 items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {[
               { k: "all", label: "All" },
               { k: "uncategorized", label: "Uncategorized" },
             ].map((b) => (
               <button
-                key={b.k}
-                data-testid={`filter-${b.k}`}
-                onClick={() => setFilter(b.k)}
+                key={b.k} data-testid={`filter-${b.k}`} onClick={() => setFilter(b.k)}
                 className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
                   filter === b.k ? "bg-[#364C2E] text-white" : "bg-[#F4EBE1] text-[#1F2E1B] hover:bg-[#EAE3D9]"
+                }`}
+              >
+                {b.label}
+              </button>
+            ))}
+            <div className="w-px h-5 bg-[#EAE3D9] mx-1" />
+            <span className="text-xs uppercase tracking-wide text-[#656C5A]">Group by</span>
+            {[
+              { k: "flat", label: "None" },
+              { k: "day", label: "Day" },
+              { k: "week", label: "Week" },
+              { k: "month", label: "Month" },
+            ].map((b) => (
+              <button
+                key={b.k} data-testid={`group-${b.k}`} onClick={() => setGroupMode(b.k)}
+                className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
+                  groupMode === b.k ? "bg-[#364C2E] text-white" : "bg-[#F4EBE1] text-[#1F2E1B] hover:bg-[#EAE3D9]"
                 }`}
               >
                 {b.label}
@@ -233,17 +376,13 @@ export default function Transactions() {
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#656C5A]" />
             <Input
-              data-testid="tx-search"
-              placeholder="Search description..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-white border-[#EAE3D9]"
+              data-testid="tx-search" placeholder="Search description..." value={search}
+              onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-white border-[#EAE3D9]"
             />
           </div>
         </div>
       </Card>
 
-      {/* Bulk action bar */}
       {selected.size > 0 && (
         <div
           className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-md bg-[#364C2E] text-white sticky top-4 z-10 shadow-lg"
@@ -253,22 +392,14 @@ export default function Transactions() {
           <span className="text-white/40">|</span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                size="sm"
-                data-testid="bulk-categorize-btn"
-                className="bg-white/15 hover:bg-white/25 text-white border-0"
-              >
+              <Button size="sm" data-testid="bulk-categorize-btn" className="bg-white/15 hover:bg-white/25 text-white border-0">
                 <Wand2 className="w-4 h-4 mr-1.5" /> Categorize as...
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="max-h-80 overflow-auto">
               <DropdownMenuLabel>Income</DropdownMenuLabel>
               {categories.filter((c) => c.type === "income").map((c) => (
-                <DropdownMenuItem
-                  key={c.id}
-                  data-testid={`bulk-cat-${c.id}`}
-                  onClick={() => bulkCategorize(c.id)}
-                >
+                <DropdownMenuItem key={c.id} data-testid={`bulk-cat-${c.id}`} onClick={() => bulkCategorize(c.id)}>
                   <span className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: c.color }} />
                   {c.name}
                 </DropdownMenuItem>
@@ -276,11 +407,7 @@ export default function Transactions() {
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Expense</DropdownMenuLabel>
               {categories.filter((c) => c.type === "expense").map((c) => (
-                <DropdownMenuItem
-                  key={c.id}
-                  data-testid={`bulk-cat-${c.id}`}
-                  onClick={() => bulkCategorize(c.id)}
-                >
+                <DropdownMenuItem key={c.id} data-testid={`bulk-cat-${c.id}`} onClick={() => bulkCategorize(c.id)}>
                   <span className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: c.color }} />
                   {c.name}
                 </DropdownMenuItem>
@@ -289,28 +416,16 @@ export default function Transactions() {
           </DropdownMenu>
           <label className="flex items-center gap-2 text-xs cursor-pointer ml-1">
             <Checkbox
-              checked={bulkApplyRule}
-              onCheckedChange={(v) => setBulkApplyRule(!!v)}
-              data-testid="bulk-apply-rule"
+              checked={bulkApplyRule} onCheckedChange={(v) => setBulkApplyRule(!!v)} data-testid="bulk-apply-rule"
               className="border-white/40 data-[state=checked]:bg-white data-[state=checked]:text-[#364C2E]"
             />
             Remember rule for similar
           </label>
-          <Button
-            size="sm"
-            onClick={bulkDelete}
-            data-testid="bulk-delete-btn"
-            className="bg-[#D96C4E] hover:bg-[#C0593E] text-white ml-auto"
-          >
+          <Button size="sm" onClick={bulkDelete} data-testid="bulk-delete-btn" className="bg-[#D96C4E] hover:bg-[#C0593E] text-white ml-auto">
             <Trash2 className="w-4 h-4 mr-1.5" /> Delete
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setSelected(new Set())}
-            data-testid="bulk-clear-btn"
-            className="text-white/80 hover:bg-white/10 hover:text-white"
-          >
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} data-testid="bulk-clear-btn"
+            className="text-white/80 hover:bg-white/10 hover:text-white">
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -334,13 +449,10 @@ export default function Transactions() {
               <thead>
                 <tr className="text-left text-[#656C5A] border-b border-[#EAE3D9]">
                   <th className="py-3 px-4 w-10">
-                    <Checkbox
-                      checked={allSelected || (someSelected ? "indeterminate" : false)}
-                      onCheckedChange={toggleAll}
-                      data-testid="select-all-checkbox"
-                    />
+                    <Checkbox checked={allSelected || (someSelected ? "indeterminate" : false)} onCheckedChange={toggleAll} data-testid="select-all-checkbox" />
                   </th>
-                  <th className="py-3 px-4 font-medium">Date</th>
+                  <th className="py-3 px-4 font-medium">Date / Time</th>
+                  <th className="py-3 px-4 font-medium">Account</th>
                   <th className="py-3 px-4 font-medium">Description</th>
                   <th className="py-3 px-4 font-medium">Category</th>
                   <th className="py-3 px-4 font-medium text-right">Amount</th>
@@ -348,66 +460,24 @@ export default function Transactions() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((t) => {
-                  const cat = catMap[t.category_id];
-                  const isSel = selected.has(t.id);
-                  return (
-                    <tr
-                      key={t.id}
-                      className={`border-b border-[#EAE3D9]/50 transition-colors ${isSel ? "bg-[#F4EBE1]/50" : "hover:bg-[#F4EBE1]/30"}`}
-                    >
-                      <td className="py-3 px-4">
-                        <Checkbox
-                          checked={isSel}
-                          onCheckedChange={() => toggle(t.id)}
-                          data-testid={`select-tx-${t.id}`}
-                        />
-                      </td>
-                      <td className="py-3 px-4 text-[#656C5A] whitespace-nowrap">{t.date}</td>
-                      <td className="py-3 px-4 max-w-md truncate" title={t.description}>{t.description}</td>
-                      <td className="py-3 px-4">
-                        {cat ? (
-                          <span
-                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium"
-                            style={{ backgroundColor: `${cat.color}1A`, color: cat.color }}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cat.color }} />
-                            {cat.name}
+                {groups.map((g) => (
+                  <React.Fragment key={g.key}>
+                    {g.label && (
+                      <tr className="bg-[#F4EBE1]/40">
+                        <td colSpan={7} className="px-4 py-2 text-xs uppercase tracking-wide text-[#1F2E1B] flex items-center justify-between">
+                          <span className="font-semibold">{g.label}</span>
+                          <span className="text-[#656C5A] normal-case tracking-normal pl-4">
+                            {g.rows.length} {g.rows.length === 1 ? "tx" : "txs"} · net{" "}
+                            <span className={g.net >= 0 ? "text-[#4B6B40] font-medium" : "text-[#D96C4E] font-medium"}>
+                              {formatGBP(g.net)}
+                            </span>
                           </span>
-                        ) : (
-                          <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-[#F4EBE1] text-[#656C5A]">
-                            Uncategorized
-                          </span>
-                        )}
-                      </td>
-                      <td className={`py-3 px-4 text-right font-medium whitespace-nowrap ${t.amount >= 0 ? "text-[#4B6B40]" : "text-[#D96C4E]"}`}>
-                        {formatGBP(t.amount)}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            data-testid={`categorize-btn-${t.id}`}
-                            onClick={() => { setEditing(t); setOpen(true); }}
-                            className="hover:bg-[#F4EBE1]"
-                          >
-                            <Tag className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            data-testid={`delete-tx-btn-${t.id}`}
-                            onClick={() => remove(t.id)}
-                            className="hover:bg-[#D96C4E]/10 text-[#D96C4E]"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                      </tr>
+                    )}
+                    {g.rows.map(renderRow)}
+                  </React.Fragment>
+                ))}
               </tbody>
             </table>
           </div>
@@ -415,16 +485,12 @@ export default function Transactions() {
       </Card>
 
       <CategorizeDialog
-        open={open}
-        onOpenChange={setOpen}
-        transaction={editing}
-        categories={categories}
-        projectId={active.id}
-        onSaved={load}
+        open={open} onOpenChange={setOpen} transaction={editing}
+        categories={categories} projectId={active.id} onSaved={load}
       />
 
       <p className="text-xs text-[#656C5A] flex items-center gap-1.5">
-        <Sparkles className="w-3.5 h-3.5" /> Tip: select multiple rows to categorize them at once. Enable "Remember rule" to auto-classify future imports.
+        <Sparkles className="w-3.5 h-3.5" /> Tip: select multiple rows to categorize them at once. Use Group by to spot inconsistencies.
       </p>
     </div>
   );

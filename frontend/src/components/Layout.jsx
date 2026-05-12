@@ -1,6 +1,7 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Receipt, Tags, Upload, BarChart3, Wallet, Plus, ChevronDown, Trash2, Repeat, Settings as SettingsIcon, Target } from "lucide-react";
+import BankAccountFilter from "./BankAccountFilter";
 import { useProject } from "../lib/projectContext";
 import { useConfirm } from "./ConfirmDialog";
 import {
@@ -142,7 +143,11 @@ export default function Layout({ children, onNewProject }) {
           </Button>
         </header>
 
-        <main className="flex-1 px-8 pt-6 pb-24 overflow-y-auto">{children}</main>
+        <div className="px-8 pt-4 flex items-center gap-3 flex-wrap">
+          <BankAccountFilter />
+        </div>
+
+        <main className="flex-1 px-8 pt-4 pb-24 overflow-y-auto">{children}</main>
       </div>
     </div>
   );

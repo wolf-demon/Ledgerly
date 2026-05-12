@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useProject } from "../lib/projectContext";
+import { useBankAccount } from "../lib/bankAccountContext";
 import api, { formatGBP, MONTHS } from "../lib/api";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -11,6 +12,7 @@ import BudgetSummary from "../components/BudgetSummary";
 
 export default function Dashboard({ onNewProject }) {
   const { active, projects, loading: projLoading } = useProject();
+  const { selectedId: bankAccountId } = useBankAccount();
   const [year, setYear] = useState(new Date().getFullYear());
   const [data, setData] = useState(null);
   const [recent, setRecent] = useState([]);
@@ -31,18 +33,17 @@ export default function Dashboard({ onNewProject }) {
   useEffect(() => {
     if (!active) return;
     (async () => {
-      const [a, t, u] = await Promise.all([
-        api.get("/analytics/yearly", { params: { project_id: active.id, year } }),
-        api.get("/transactions", { params: { project_id: active.id, limit: 8 } }),
-        api.get("/transactions", { params: { project_id: active.id, uncategorized: true, limit: 1 } }),
+      const extra = bankAccountId ? { bank_account_id: bankAccountId } : {};
+      const [a, t] = await Promise.all([
+        api.get("/analytics/yearly", { params: { project_id: active.id, year, ...extra } }),
+        api.get("/transactions", { params: { project_id: active.id, limit: 8, ...extra } }),
       ]);
       setData(a.data);
       setRecent(t.data);
-      // count uncategorized properly
-      const all = await api.get("/transactions", { params: { project_id: active.id, uncategorized: true, limit: 5000 } });
+      const all = await api.get("/transactions", { params: { project_id: active.id, uncategorized: true, limit: 5000, ...extra } });
       setUncategorizedCount(all.data.length);
     })();
-  }, [active, year]);
+  }, [active, year, bankAccountId]);
 
   if (projLoading) {
     return <div className="p-8 text-[#656C5A]">Loading...</div>;

@@ -9,11 +9,13 @@ from fastapi.responses import StreamingResponse
 
 from app_db import db
 from models import (
+    BankAccount,
     CategoryRule,
     Transaction,
     TransactionUpdate,
     UrlImportPayload,
 )
+from routes.bank_accounts import detect_from_pdf_text, normalise_sort_code
 from services.helpers import (
     apply_rules,
     force_amount_sign,
@@ -24,7 +26,99 @@ from services.parsers import google_sheet_to_csv_url, parse_any
 router = APIRouter()
 
 
-async def _ingest_rows(project_id: str, rows: List[Dict[str, Any]]) -> Dict[str, int]:
+async def _resolve_bank_account(
+    project_id: str, raw_content: bytes, filename: str, explicit_id: Optional[str]
+) -> tuple[Optional[str], Dict[str, Any]]:
+    """Pick (or auto-create) a bank account for this upload.
+
+    Returns (bank_account_id, info_dict_for_response). The info dict reports
+    whether the account was auto-detected, newly created, or unknown.
+    """
+    info: Dict[str, Any] = {"auto_detected": False, "created": False, "sort_code": None}
+
+    # 1. Explicit override from the upload form always wins.
+    if explicit_id:
+        acct = await db.bank_accounts.find_one({"id": explicit_id, "project_id": project_id}, {"_id": 0})
+        if acct:
+            info["account_name"] = acct["name"]
+            return explicit_id, info
+
+    # 2. PDF-only auto-detect via sort code embedded in the file text.
+    if not filename.lower().endswith(".pdf"):
+        return None, info
+    try:
+        import pdfplumber
+        with pdfplumber.open(io.BytesIO(raw_content)) as pdf:
+            text = "\n".join((p.extract_text() or "") for p in pdf.pages[:2])  # first 2 pages
+    except Exception:
+        return None, info
+
+    sort_code, account_number, bank_name = detect_from_pdf_text(text)
+    if not sort_code:
+        return None, info
+    info["sort_code"] = sort_code
+
+    # 3. Match an existing account in this project.
+    match = await db.bank_accounts.find_one(
+        {"project_id": project_id, "sort_code": sort_code}, {"_id": 0}
+    )
+    if match:
+        info["auto_detected"] = True
+        info["account_name"] = match["name"]
+        return match["id"], info
+
+    # 4. None matched → auto-create with the detected metadata.
+    new_name = bank_name or f"Account •••{(account_number or '')[-4:]}" or "Detected account"
+    palette = ["#728A66", "#4B6B40", "#D96C4E", "#D1A77E", "#8B5E3C"]
+    existing_count = len(await db.bank_accounts.find({"project_id": project_id}, {"_id": 0}).to_list(200))
+    acct = BankAccount(
+        project_id=project_id,
+        name=new_name,
+        sort_code=normalise_sort_code(sort_code),
+        account_number=account_number,
+        color=palette[existing_count % len(palette)],
+    )
+    doc = acct.model_dump()
+    doc["created_at"] = doc["created_at"].isoformat()
+    await db.bank_accounts.insert_one(doc)
+    info["auto_detected"] = True
+    info["created"] = True
+    info["account_name"] = new_name
+    return acct.id, info
+
+
+async def _next_time_for_date(project_id: str, bank_account_id: Optional[str], date: str) -> str:
+    """Compute a sequential HH:MM:SS for a same-date import so duplicates / order
+    is preserved. We bucket per (project, bank_account, date) and increment by
+    one second from the latest existing time on that date.
+    """
+    spec: Dict[str, Any] = {"project_id": project_id, "date": date}
+    if bank_account_id:
+        spec["bank_account_id"] = bank_account_id
+    existing = await db.transactions.find(spec, {"_id": 0}).to_list(10000)
+    max_seconds = 0
+    for t in existing:
+        tm = t.get("time")
+        if not tm:
+            continue
+        parts = tm.split(":")
+        if len(parts) >= 2:
+            try:
+                h, m, s = int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0
+                max_seconds = max(max_seconds, h * 3600 + m * 60 + s)
+            except ValueError:
+                continue
+    next_seconds = max_seconds + 1
+    h, rem = divmod(next_seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h > 23:
+        h, m, s = 23, 59, 59  # cap; unusual to have >23h of dupes
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+async def _ingest_rows(
+    project_id: str, rows: List[Dict[str, Any]], bank_account_id: Optional[str] = None
+) -> Dict[str, int]:
     inserted = 0
     skipped = 0
     for r in rows:
@@ -39,9 +133,12 @@ async def _ingest_rows(project_id: str, rows: List[Dict[str, Any]]) -> Dict[str,
             continue
         ttype = "income" if r["amount"] >= 0 else "expense"
         cat_id = await apply_rules(project_id, r["description"])
+        time_str = r.get("time") or await _next_time_for_date(project_id, bank_account_id, r["date"])
         tx = Transaction(
             project_id=project_id,
+            bank_account_id=bank_account_id,
             date=r["date"],
+            time=time_str,
             description=r["description"],
             amount=r["amount"],
             type=ttype,
@@ -55,7 +152,11 @@ async def _ingest_rows(project_id: str, rows: List[Dict[str, Any]]) -> Dict[str,
 
 
 @router.post("/transactions/upload")
-async def upload_statement(project_id: str = Form(...), file: UploadFile = File(...)):
+async def upload_statement(
+    project_id: str = Form(...),
+    file: UploadFile = File(...),
+    bank_account_id: Optional[str] = Form(None),
+):
     proj = await db.projects.find_one({"id": project_id}, {"_id": 0})
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -69,7 +170,13 @@ async def upload_statement(project_id: str = Form(...), file: UploadFile = File(
             status_code=400,
             detail="No transactions found. Supported: CSV, TSV, PDF, Excel (.xlsx/.xls), OpenDocument (.ods), OFX/QFX.",
         )
-    return await _ingest_rows(project_id, rows)
+
+    bank_id, bank_info = await _resolve_bank_account(project_id, content, file.filename or "", bank_account_id)
+    result = await _ingest_rows(project_id, rows, bank_account_id=bank_id)
+    result["bank_account"] = bank_info
+    if bank_id:
+        result["bank_account_id"] = bank_id
+    return result
 
 
 @router.post("/transactions/import-url")
@@ -127,6 +234,7 @@ async def list_transactions(
     year: Optional[int] = None,
     month: Optional[int] = None,
     uncategorized: Optional[bool] = None,
+    bank_account_id: Optional[str] = None,
     limit: int = 5000,
 ):
     q: Dict[str, Any] = {"project_id": project_id}
@@ -137,6 +245,8 @@ async def list_transactions(
         q["date"] = {"$regex": f"^{year:04d}"}
     if uncategorized:
         q["category_id"] = None
+    if bank_account_id:
+        q["bank_account_id"] = bank_account_id
     docs = await db.transactions.find(q, {"_id": 0}).sort("date", -1).to_list(limit)
     for d in docs:
         if isinstance(d.get('created_at'), str):
