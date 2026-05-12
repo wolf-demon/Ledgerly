@@ -49,7 +49,8 @@ export default function Reports() {
 
   const cellShade = (val, color) => {
     const ratio = Math.abs(val) / maxVal;
-    const opacity = ratio === 0 ? 0 : Math.max(0.18, ratio);
+    // Keep cells light so dark text stays high-contrast. Most active month ~30%.
+    const opacity = ratio === 0 ? 0 : Math.min(0.30, 0.05 + ratio * 0.30);
     return { backgroundColor: color, opacity };
   };
 
@@ -85,14 +86,20 @@ export default function Reports() {
               {c.monthly.map((v, i) => (
                 <td key={i} className="text-center px-1 py-2">
                   <div
-                    className="rounded px-1.5 py-1.5 text-xs font-semibold heatmap-cell"
+                    className="relative rounded heatmap-cell"
                     style={{
                       ...cellShade(v, c.color),
-                      color: "#1F2E1B",
                     }}
                     title={`${MONTHS[i]} ${year}: ${formatGBP(v)}`}
                   >
-                    {v === 0 ? "—" : formatGBP(Math.abs(v)).replace(".00", "")}
+                    {/* Number lives in a sibling so the parent's opacity tint
+                        doesn't drag the text alpha down too. */}
+                  </div>
+                  <div
+                    className="-mt-[26px] mx-0.5 px-1 py-1 text-xs font-semibold relative"
+                    style={{ color: "#1F2E1B" }}
+                  >
+                    {v === 0 ? <span className="text-[#9E988C]">—</span> : formatGBP(Math.abs(v)).replace(".00", "")}
                   </div>
                 </td>
               ))}

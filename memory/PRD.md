@@ -123,10 +123,47 @@ N/A (no auth)
 - Result: **14/14 new + 81/82 regression = 95/96 passing**, frontend e2e 12/12.
 
 ## Backlog
-- P1: Bank-specific PDF parser overrides — DONE for Nationwide + Bank of Scotland in iteration 10
 - P2: PRAGMA integrity_check on startup with WAL-orphan warning
 - P2: In-app "Updates" banner driven by IPC bridge from `updater.js`
 - P2: Sync Dashboard BudgetSummary period with `/budgets` page selector (cosmetic)
+
+### Iteration 11 (2026-02-08) — Bank accounts, sub-categories, time-of-day, group-by, heatmap fix
+
+**Yearly Report color fix.** Monthly cell text now always renders dark (#1F2E1B) on a low-opacity tint (≤30%); fixes the unreadable numbers on lighter months.
+
+**Bank accounts (full new domain):**
+- New `bank_accounts` SQLite table with auto-migration via `PRAGMA table_info` + `ALTER ADD COLUMN`.
+- `models.BankAccount/Create/Update` plus `bank_account_id` on `Transaction`.
+- `routes/bank_accounts.py`: full CRUD; UK sort-code regex (`12-34-56` and variants); 409 on duplicates within a project; delete detaches transactions (sets `bank_account_id` NULL).
+- **Upload auto-detection**: PDF upload extracts text from first 2 pages, finds the sort code, picks/creates a matching `BankAccount`, attaches it to all imported rows. Recognises Nationwide, Bank of Scotland, Lloyds, Monzo, Starling, Barclays, HSBC, Santander, NatWest, First Direct, Revolut, Halifax.
+- **Cascade**: `delete_project` cleans up `bank_accounts`.
+
+**Time of day on transactions:**
+- New `time` column on `transactions`.
+- `_next_time_for_date()` auto-assigns sequential `00:00:01`, `00:00:02`, … per (project, account, date) on import so duplicates / order is preserved.
+- Transactions UI: time renders below the date in small tabular-nums when present.
+
+**Global bank filter pill:**
+- New `BankAccountProvider` context, per-project localStorage key (`ledgerly.bankFilter:<project_id>`); survives page navigations + reloads.
+- New `BankAccountFilter` header pill component using Radix `DropdownMenu` + radio group.
+- Applied to: GET `/transactions`, `/analytics/yearly`, Transactions page, Reports page, Dashboard.
+- Empty state: 'No accounts yet' chip (no upload yet).
+
+**Day / Week / Month grouping on Transactions:**
+- New `groupMode` state with toggle buttons (data-testids `group-flat/day/week/month`).
+- Per-group header row shows label + tx count + net total in green/red.
+
+**Sub-categories (one level deep, with roll-up):**
+- `Category.parent_id` added; POST/PUT validate that a sub-cat's parent is itself top-level.
+- `delete_category` detaches children (sets `parent_id` NULL) instead of cascade-deleting.
+- `analytics/yearly` rolls each child's totals into its root for the headline breakdown.
+- `budgets/progress` walks the parent chain and counts a child transaction toward every ancestor budget.
+- Categories page: tree view with indented children and an inline `+` to add a sub-category with the parent pre-selected. New Category dialog gets a parent picker.
+
+**Tests:**
+- New `/app/backend/tests/test_iteration11_bank_subcat.py` — 15 cases (CRUD, 409 duplicates, PDF auto-detect, sub-category one-level enforcement, budget roll-up).
+- Result: **15/15 new + 90 regression = 105/106 passing** (1 pre-existing skip).
+- Frontend e2e: **19/19 user-visible checkpoints** validated against the public preview URL.
 
 ### Iteration 10 (2026-02-08) — Real-world PDF parser fixes
 
