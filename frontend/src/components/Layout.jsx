@@ -57,16 +57,16 @@ export default function Layout({ children, onNewProject }) {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#FDFBF7] text-[#1F2E1B]">
+    <div className="min-h-screen flex bg-[var(--c-bg)] text-[var(--c-ink)]">
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 border-r border-[#EAE3D9] bg-[#FDFBF7] flex flex-col">
-        <div className="h-16 flex items-center gap-3 px-6 border-b border-[#EAE3D9]">
-          <div className="w-9 h-9 rounded-md bg-[#364C2E] flex items-center justify-center">
-            <Wallet className="w-5 h-5 text-white" />
+      <aside className="w-64 shrink-0 border-r border-[var(--c-border)] bg-[var(--c-bg)] flex flex-col">
+        <div className="h-16 flex items-center gap-3 px-6 border-b border-[var(--c-border)]">
+          <div className="w-9 h-9 rounded-md bg-[var(--c-primary)] flex items-center justify-center">
+            <Wallet className="w-5 h-5 text-[var(--c-on-primary)]" />
           </div>
           <div>
             <div className="font-semibold tracking-tight" style={{ fontFamily: "Work Sans" }}>Ledgerly</div>
-            <div className="text-xs text-[#656C5A] -mt-0.5">Personal finance</div>
+            <div className="text-xs text-[var(--c-muted)] -mt-0.5">Personal finance</div>
           </div>
         </div>
 
@@ -80,8 +80,8 @@ export default function Layout({ children, onNewProject }) {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all duration-200 ${
                   isActive
-                    ? "bg-[#364C2E] text-white"
-                    : "text-[#1F2E1B] hover:bg-[#F4EBE1]"
+                    ? "bg-[var(--c-primary)] text-[var(--c-on-primary)]"
+                    : "text-[var(--c-ink)] hover:bg-[var(--c-surface)]"
                 }`
               }
             >
@@ -91,9 +91,9 @@ export default function Layout({ children, onNewProject }) {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-[#EAE3D9]">
-          <p className="text-xs text-[#656C5A] uppercase tracking-[0.18em]">Tip</p>
-          <p className="text-xs text-[#656C5A] mt-2 leading-relaxed">
+        <div className="p-4 border-t border-[var(--c-border)]">
+          <p className="text-xs text-[var(--c-muted)] uppercase tracking-[0.18em]">Tip</p>
+          <p className="text-xs text-[var(--c-muted)] mt-2 leading-relaxed">
             Upload a CSV or PDF to auto-classify recurring merchants.
           </p>
         </div>
@@ -102,17 +102,17 @@ export default function Layout({ children, onNewProject }) {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-16 flex items-center justify-between px-8 border-b border-[#EAE3D9] bg-[#FDFBF7] sticky top-0 z-20">
+        <header className="h-16 flex items-center justify-between px-8 border-b border-[var(--c-border)] bg-[var(--c-bg)] sticky top-0 z-20">
           <div className="flex items-center gap-3">
-            <span className="text-xs uppercase tracking-[0.2em] text-[#656C5A]">Project</span>
+            <span className="text-xs uppercase tracking-[0.2em] text-[var(--c-muted)]">Project</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   data-testid="project-switcher"
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-[#F4EBE1] transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-[var(--c-surface)] transition-colors text-sm font-medium"
                 >
                   {active ? active.name : "No project"}
-                  <ChevronDown className="w-4 h-4 text-[#656C5A]" />
+                  <ChevronDown className="w-4 h-4 text-[var(--c-muted)]" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64">
@@ -132,7 +132,7 @@ export default function Layout({ children, onNewProject }) {
                   <Plus className="w-4 h-4 mr-2" /> New project
                 </DropdownMenuItem>
                 {active && (
-                  <DropdownMenuItem onClick={handleDelete} className="text-[#D96C4E]" data-testid="delete-project-menu">
+                  <DropdownMenuItem onClick={handleDelete} className="text-[var(--c-danger)]" data-testid="delete-project-menu">
                     <Trash2 className="w-4 h-4 mr-2" /> Delete current
                   </DropdownMenuItem>
                 )}
@@ -143,7 +143,7 @@ export default function Layout({ children, onNewProject }) {
           <Button
             onClick={onNewProject}
             data-testid="header-new-project-btn"
-            className="bg-[#364C2E] hover:bg-[#22331D] text-white rounded-md font-medium"
+            className="bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)] rounded-md font-medium"
           >
             <Plus className="w-4 h-4 mr-1.5" /> New Project
           </Button>

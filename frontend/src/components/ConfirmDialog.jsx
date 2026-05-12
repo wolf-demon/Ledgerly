@@ -68,11 +68,11 @@ export function ConfirmProvider({ children }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       <Dialog open={state.open} onOpenChange={(o) => !o && close(false)}>
-        <DialogContent className="bg-white border-[#EAE3D9]" data-testid="confirm-dialog">
+        <DialogContent className="bg-[var(--c-card)] border-[var(--c-border)]" data-testid="confirm-dialog">
           <DialogHeader>
             <DialogTitle style={{ fontFamily: "Work Sans" }}>{state.title}</DialogTitle>
             {state.body && (
-              <DialogDescription className="text-[#656C5A] whitespace-pre-line">
+              <DialogDescription className="text-[var(--c-muted)] whitespace-pre-line">
                 {state.body}
               </DialogDescription>
             )}
@@ -82,7 +82,7 @@ export function ConfirmProvider({ children }) {
               variant="outline"
               onClick={() => close(false)}
               data-testid="confirm-cancel-btn"
-              className="border-[#EAE3D9]"
+              className="border-[var(--c-border)]"
             >
               {state.cancelLabel}
             </Button>
@@ -91,8 +91,8 @@ export function ConfirmProvider({ children }) {
               data-testid="confirm-ok-btn"
               className={
                 state.destructive
-                  ? "bg-[#D96C4E] hover:bg-[#C0593E] text-white"
-                  : "bg-[#364C2E] hover:bg-[#22331D] text-white"
+                  ? "bg-[var(--c-danger)] hover:bg-[var(--c-danger-deep)] text-[var(--c-on-primary)]"
+                  : "bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)]"
               }
               autoFocus
             >

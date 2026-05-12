@@ -94,15 +94,15 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-white border-[#EAE3D9] max-w-2xl" data-testid="split-dialog">
+      <DialogContent className="bg-[var(--c-card)] border-[var(--c-border)] max-w-2xl" data-testid="split-dialog">
         <DialogHeader>
           <DialogTitle style={{ fontFamily: "Work Sans" }}>Split transaction</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-1 py-1">
-          <p className="text-sm text-[#656C5A]">
+          <p className="text-sm text-[var(--c-muted)]">
             {transaction.description}
-            <span className="ml-2 font-medium text-[#1F2E1B]">{formatGBP(transaction.amount)}</span>
+            <span className="ml-2 font-medium text-[var(--c-ink)]">{formatGBP(transaction.amount)}</span>
             <span className="ml-2 text-xs">on {transaction.date}</span>
           </p>
         </div>
@@ -111,11 +111,11 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
           {lines.map((l, idx) => (
             <div
               key={idx}
-              className="grid grid-cols-12 gap-2 items-end px-2 py-2 rounded-md border border-[#EAE3D9]/60 hover:border-[#D1A77E]/60 transition-colors"
+              className="grid grid-cols-12 gap-2 items-end px-2 py-2 rounded-md border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] hover:border-[color-mix(in_srgb,var(--c-accent)_60%,transparent)] transition-colors"
               data-testid={`split-line-${idx}`}
             >
               <div className="col-span-3">
-                {idx === 0 && <Label className="text-xs text-[#656C5A]">Amount £</Label>}
+                {idx === 0 && <Label className="text-xs text-[var(--c-muted)]">Amount £</Label>}
                 <div className="flex items-center gap-1">
                   <Input
                     type="number" step="0.01" inputMode="decimal"
@@ -128,7 +128,7 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
                     type="button"
                     onClick={() => balanceTo(idx)}
                     title="Set this line to balance the total"
-                    className="text-[10px] px-1.5 py-0.5 rounded text-[#364C2E] bg-[#F4EBE1] hover:bg-[#EAE3D9]"
+                    className="text-[10px] px-1.5 py-0.5 rounded text-[var(--c-primary)] bg-[var(--c-surface)] hover:bg-[var(--c-border)]"
                     data-testid={`split-balance-${idx}`}
                   >
                     =
@@ -136,12 +136,12 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
                 </div>
               </div>
               <div className="col-span-4">
-                {idx === 0 && <Label className="text-xs text-[#656C5A]">Category</Label>}
+                {idx === 0 && <Label className="text-xs text-[var(--c-muted)]">Category</Label>}
                 <select
                   value={l.category_id}
                   onChange={(e) => updateLine(idx, { category_id: e.target.value })}
                   data-testid={`split-category-${idx}`}
-                  className="w-full h-9 px-2 bg-white border border-[#EAE3D9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#364C2E]/20"
+                  className="w-full h-9 px-2 bg-[var(--c-card)] border border-[var(--c-border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--c-primary)_20%,transparent)]"
                 >
                   <option value="">— pick —</option>
                   {pool.map((c) => (
@@ -150,7 +150,7 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
                 </select>
               </div>
               <div className="col-span-4">
-                {idx === 0 && <Label className="text-xs text-[#656C5A]">Description (optional)</Label>}
+                {idx === 0 && <Label className="text-xs text-[var(--c-muted)]">Description (optional)</Label>}
                 <Input
                   value={l.description}
                   onChange={(e) => updateLine(idx, { description: e.target.value })}
@@ -163,7 +163,7 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
                 {lines.length > 2 && (
                   <Button
                     size="sm" variant="ghost" onClick={() => removeLine(idx)}
-                    className="text-[#D96C4E] hover:bg-[#D96C4E]/10"
+                    className="text-[var(--c-danger)] hover:bg-[color-mix(in_srgb,var(--c-danger)_10%,transparent)]"
                     data-testid={`split-remove-${idx}`}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -171,7 +171,7 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
                 )}
               </div>
               {l.reason && (
-                <p className="col-span-12 text-[11px] text-[#728A66] italic flex items-center gap-1">
+                <p className="col-span-12 text-[11px] text-[var(--c-primary-soft)] italic flex items-center gap-1">
                   <Wand2 className="w-3 h-3" /> AI suggestion: {l.reason}
                 </p>
               )}
@@ -182,7 +182,7 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
         <div className="flex items-center justify-between pt-2">
           <Button
             type="button" variant="outline" onClick={addLine}
-            className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
+            className="border-[var(--c-border)] hover:bg-[var(--c-surface)]"
             data-testid="split-add-line"
           >
             <Plus className="w-4 h-4 mr-1.5" /> Add line
@@ -190,8 +190,8 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
           <div
             className={`text-sm tabular-nums px-3 py-1.5 rounded-md font-medium ${
               Math.abs(remaining) < 0.005
-                ? "bg-[#4B6B40]/10 text-[#4B6B40]"
-                : "bg-[#D96C4E]/10 text-[#D96C4E]"
+                ? "bg-[color-mix(in_srgb,var(--c-success)_10%,transparent)] text-[var(--c-success)]"
+                : "bg-[color-mix(in_srgb,var(--c-danger)_10%,transparent)] text-[var(--c-danger)]"
             }`}
             data-testid="split-remaining"
           >
@@ -207,7 +207,7 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="split-cancel">Cancel</Button>
           <Button
             onClick={save} disabled={!canSave} data-testid="split-save"
-            className="bg-[#364C2E] hover:bg-[#22331D] text-white disabled:opacity-50"
+            className="bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)] disabled:opacity-50"
           >
             Save split
           </Button>

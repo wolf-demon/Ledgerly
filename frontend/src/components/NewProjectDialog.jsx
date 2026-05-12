@@ -58,7 +58,7 @@ export default function NewProjectDialog({ open, onOpenChange, onCreated }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="bg-white border-[#EAE3D9]"
+        className="bg-[var(--c-card)] border-[var(--c-border)]"
         onOpenAutoFocus={(e) => {
           // Let our own useEffect handle focusing the name field after mount.
           e.preventDefault();
@@ -66,7 +66,7 @@ export default function NewProjectDialog({ open, onOpenChange, onCreated }) {
       >
         <DialogHeader>
           <DialogTitle style={{ fontFamily: "Work Sans" }}>Create new project</DialogTitle>
-          <DialogDescription className="text-[#656C5A]">
+          <DialogDescription className="text-[var(--c-muted)]">
             Each project keeps its own transactions, categories and rules. Useful for separating personal and business finances.
           </DialogDescription>
         </DialogHeader>
@@ -110,7 +110,7 @@ export default function NewProjectDialog({ open, onOpenChange, onCreated }) {
             onClick={submit}
             disabled={submitting}
             data-testid="submit-new-project-btn"
-            className="bg-[#364C2E] hover:bg-[#22331D] text-white"
+            className="bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)]"
           >
             {submitting ? "Creating..." : "Create project"}
           </Button>

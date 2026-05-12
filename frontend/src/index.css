@@ -4,25 +4,54 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+   Theme system.
+   Each theme defines a set of named CSS variables (c-bg, c-ink, c-primary…).
+   All app components reference these via Tailwind arbitrary values
+   e.g. bg-[var(--c-primary)] / text-[var(--c-ink)].
+   Switching themes is just setting data-theme on <html>.
+--------------------------------------------------------------------------- */
+
 @layer base {
-    :root {
-        --background: 39 38% 98%;        /* #FDFBF7 */
-        --foreground: 100 25% 14%;       /* #1F2E1B */
+    /* ----- Sage (default, warm earthy light) ------------------------------ */
+    :root, [data-theme="sage"] {
+        --c-bg:           #FDFBF7;
+        --c-bg-alt:       #FAF7F2;
+        --c-card:         #FFFFFF;
+        --c-surface:      #F4EBE1;   /* hover / soft accent surface */
+        --c-border:       #EAE3D9;
+        --c-ink:          #1F2E1B;   /* primary text */
+        --c-muted:        #656C5A;
+        --c-muted-2:      #9E988C;
+        --c-primary:      #364C2E;
+        --c-primary-deep: #22331D;
+        --c-primary-soft: #728A66;
+        --c-success:      #4B6B40;   /* income */
+        --c-danger:       #D96C4E;   /* expense / destructive */
+        --c-danger-deep:  #C0593E;
+        --c-accent:       #D1A77E;
+        --c-accent-2:     #E3C8AA;
+        --c-warn:         #8B5E3C;
+        --c-on-primary:   #FFFFFF;
+
+        /* Shadcn surfaces (kept aliased to theme so dialogs/menus follow it) */
+        --background: 39 38% 98%;
+        --foreground: 100 25% 14%;
         --card: 0 0% 100%;
         --card-foreground: 100 25% 14%;
         --popover: 0 0% 100%;
         --popover-foreground: 100 25% 14%;
-        --primary: 100 24% 24%;          /* #364C2E */
+        --primary: 100 24% 24%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 33 41% 92%;         /* #F4EBE1 */
+        --secondary: 33 41% 92%;
         --secondary-foreground: 100 24% 24%;
         --muted: 33 41% 92%;
-        --muted-foreground: 75 7% 39%;   /* #656C5A */
+        --muted-foreground: 75 7% 39%;
         --accent: 33 41% 92%;
         --accent-foreground: 100 24% 24%;
-        --destructive: 14 65% 58%;       /* #D96C4E */
+        --destructive: 14 65% 58%;
         --destructive-foreground: 0 0% 100%;
-        --border: 33 30% 89%;            /* #EAE3D9 */
+        --border: 33 30% 89%;
         --input: 33 30% 89%;
         --ring: 100 24% 24%;
         --chart-1: 100 24% 24%;
@@ -31,33 +60,181 @@
         --chart-4: 100 14% 47%;
         --chart-5: 32 53% 78%;
         --radius: 0.5rem;
+    }
 
-        --income: 100 24% 33%;           /* #4B6B40 */
-        --expense: 14 65% 58%;
+    /* ----- Midnight (deep slate + emerald) -------------------------------- */
+    [data-theme="midnight"] {
+        --c-bg:           #0F1419;
+        --c-bg-alt:       #141B22;
+        --c-card:         #1A222B;
+        --c-surface:      #232E39;
+        --c-border:       #2A3543;
+        --c-ink:          #E8EEF2;
+        --c-muted:        #8FA0AE;
+        --c-muted-2:      #5F6D78;
+        --c-primary:      #4ADE80;
+        --c-primary-deep: #22C55E;
+        --c-primary-soft: #166534;
+        --c-success:      #4ADE80;
+        --c-danger:       #F87171;
+        --c-danger-deep:  #DC2626;
+        --c-accent:       #FCD34D;
+        --c-accent-2:     #FDE68A;
+        --c-warn:         #FBBF24;
+        --c-on-primary:   #0F1419;
+
+        --background: 215 26% 8%;
+        --foreground: 200 25% 92%;
+        --card: 215 22% 14%;
+        --card-foreground: 200 25% 92%;
+        --popover: 215 22% 14%;
+        --popover-foreground: 200 25% 92%;
+        --primary: 142 71% 58%;
+        --primary-foreground: 215 26% 8%;
+        --secondary: 215 18% 18%;
+        --secondary-foreground: 200 25% 92%;
+        --muted: 215 18% 18%;
+        --muted-foreground: 215 14% 62%;
+        --accent: 215 18% 18%;
+        --accent-foreground: 200 25% 92%;
+        --destructive: 0 84% 70%;
+        --destructive-foreground: 215 26% 8%;
+        --border: 215 18% 22%;
+        --input: 215 18% 22%;
+        --ring: 142 71% 58%;
+        --chart-1: 142 71% 58%;
+        --chart-2: 0 84% 70%;
+        --chart-3: 45 96% 64%;
+        --chart-4: 199 89% 65%;
+        --chart-5: 280 78% 70%;
+    }
+
+    /* ----- Ocean (cool light, deep teal accents) -------------------------- */
+    [data-theme="ocean"] {
+        --c-bg:           #F4F8FB;
+        --c-bg-alt:       #EDF3F8;
+        --c-card:         #FFFFFF;
+        --c-surface:      #E1ECF4;
+        --c-border:       #D5E2EC;
+        --c-ink:          #0F2235;
+        --c-muted:        #5A6E80;
+        --c-muted-2:      #93A4B5;
+        --c-primary:      #0F6F8F;
+        --c-primary-deep: #075066;
+        --c-primary-soft: #5BA8C0;
+        --c-success:      #0F8A6E;
+        --c-danger:       #E0506C;
+        --c-danger-deep:  #B8364E;
+        --c-accent:       #F2B544;
+        --c-accent-2:     #FBD888;
+        --c-warn:         #C57B22;
+        --c-on-primary:   #FFFFFF;
+
+        --background: 207 36% 97%;
+        --foreground: 207 56% 13%;
+        --card: 0 0% 100%;
+        --card-foreground: 207 56% 13%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 207 56% 13%;
+        --primary: 194 81% 31%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 204 41% 92%;
+        --secondary-foreground: 194 81% 31%;
+        --muted: 204 41% 92%;
+        --muted-foreground: 211 17% 43%;
+        --accent: 204 41% 92%;
+        --accent-foreground: 194 81% 31%;
+        --destructive: 350 70% 60%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 207 28% 88%;
+        --input: 207 28% 88%;
+        --ring: 194 81% 31%;
+        --chart-1: 194 81% 31%;
+        --chart-2: 350 70% 60%;
+        --chart-3: 41 87% 61%;
+        --chart-4: 165 80% 30%;
+        --chart-5: 218 30% 60%;
+    }
+
+    /* ----- Aurora (deep violet dark theme) -------------------------------- */
+    [data-theme="aurora"] {
+        --c-bg:           #131127;
+        --c-bg-alt:       #1A1733;
+        --c-card:         #221E40;
+        --c-surface:      #2B2654;
+        --c-border:       #3A3268;
+        --c-ink:          #F0EBFF;
+        --c-muted:        #B0A6D6;
+        --c-muted-2:      #6E689A;
+        --c-primary:      #B591F5;
+        --c-primary-deep: #8B5CF6;
+        --c-primary-soft: #4F3F8C;
+        --c-success:      #34D399;
+        --c-danger:       #FB7185;
+        --c-danger-deep:  #E11D48;
+        --c-accent:       #F4C77B;
+        --c-accent-2:     #FBDFA8;
+        --c-warn:         #F59E0B;
+        --c-on-primary:   #131127;
+
+        --background: 245 38% 11%;
+        --foreground: 257 72% 96%;
+        --card: 246 36% 19%;
+        --card-foreground: 257 72% 96%;
+        --popover: 246 36% 19%;
+        --popover-foreground: 257 72% 96%;
+        --primary: 262 84% 76%;
+        --primary-foreground: 245 38% 11%;
+        --secondary: 246 36% 26%;
+        --secondary-foreground: 257 72% 96%;
+        --muted: 246 36% 26%;
+        --muted-foreground: 257 33% 75%;
+        --accent: 246 36% 26%;
+        --accent-foreground: 257 72% 96%;
+        --destructive: 350 95% 72%;
+        --destructive-foreground: 245 38% 11%;
+        --border: 246 36% 31%;
+        --input: 246 36% 31%;
+        --ring: 262 84% 76%;
+        --chart-1: 262 84% 76%;
+        --chart-2: 350 95% 72%;
+        --chart-3: 41 87% 72%;
+        --chart-4: 165 71% 52%;
+        --chart-5: 199 90% 70%;
     }
 }
 
 @layer base {
-    * {
-        @apply border-border;
-    }
+    * { @apply border-border; }
     html, body {
-        @apply bg-background text-foreground;
+        background-color: var(--c-bg);
+        color: var(--c-ink);
         font-family: 'IBM Plex Sans', sans-serif;
         font-feature-settings: "ss01", "ss02";
+        transition: background-color 200ms ease, color 200ms ease;
     }
     h1, h2, h3, h4, h5, h6 {
         font-family: 'Work Sans', sans-serif;
         letter-spacing: -0.01em;
     }
+    /* Subtle global polish */
+    button, [role="button"], a, input, select, textarea {
+        transition: background-color 150ms ease, color 150ms ease,
+                    border-color 150ms ease, box-shadow 150ms ease,
+                    transform 120ms ease;
+    }
+    input:focus-visible, textarea:focus-visible, select:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--c-primary) 45%, transparent);
+        outline-offset: 2px;
+    }
 }
 
 ::selection {
-    background-color: #364C2E;
-    color: #FDFBF7;
+    background-color: var(--c-primary);
+    color: var(--c-on-primary);
 }
 
-/* Custom subtle grain */
+/* Grain texture (subtle paper feel; opacity drops on dark themes via theme override) */
 .grain-bg {
     position: relative;
 }
@@ -65,26 +242,60 @@
     content: '';
     position: absolute;
     inset: 0;
-    background-image: radial-gradient(rgba(54, 76, 46, 0.04) 1px, transparent 1px);
+    background-image: radial-gradient(color-mix(in srgb, var(--c-primary) 5%, transparent) 1px, transparent 1px);
     background-size: 4px 4px;
     pointer-events: none;
-    opacity: 0.6;
+    opacity: 0.55;
 }
 
-.scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
+/* Thin scrollbar that follows the theme */
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: #EAE3D9;
+    background-color: var(--c-border);
     border-radius: 3px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: #D1A77E;
+    background-color: var(--c-accent);
+}
+
+/* Global skeleton shimmer (used by Skeleton component) */
+@keyframes ledger-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+.ledger-skeleton {
+    background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--c-border) 40%, transparent) 0%,
+        color-mix(in srgb, var(--c-border) 80%, transparent) 50%,
+        color-mix(in srgb, var(--c-border) 40%, transparent) 100%
+    );
+    background-size: 200% 100%;
+    animation: ledger-shimmer 1.6s ease-in-out infinite;
+    border-radius: 6px;
+}
+
+/* Page-load fade-in stagger helper */
+@keyframes ledger-fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.ledger-fade-in {
+    animation: ledger-fade-up 360ms cubic-bezier(.2,.7,.3,1) both;
+}
+
+/* Card hover lift used by Dashboard/Reports widgets */
+.ledger-card {
+    background-color: var(--c-card);
+    border: 1px solid var(--c-border);
+    border-radius: 12px;
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+.ledger-card:hover {
+    box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--c-ink) 30%, transparent);
+    border-color: color-mix(in srgb, var(--c-primary) 30%, var(--c-border));
 }
 
 @layer base {
-    [data-debug-wrapper="true"] {
-        display: contents !important;
-    }
+    [data-debug-wrapper="true"] { display: contents !important; }
 }

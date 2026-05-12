@@ -5,9 +5,9 @@ import { Card } from "../components/ui/card";
 import { Wallet, ArrowRight } from "lucide-react";
 
 const STATUS = {
-  ok: "bg-[#4B6B40]",
-  warn: "bg-[#D1A77E]",
-  over: "bg-[#D96C4E]",
+  ok: "bg-[var(--c-success)]",
+  warn: "bg-[var(--c-accent)]",
+  over: "bg-[var(--c-danger)]",
 };
 
 export default function BudgetSummary({ projectId, year, month }) {
@@ -33,20 +33,20 @@ export default function BudgetSummary({ projectId, year, month }) {
 
   if (items.length === 0) {
     return (
-      <Card className="p-6 bg-white border-[#EAE3D9] shadow-none" data-testid="dashboard-budget-empty">
+      <Card className="p-6 bg-[var(--c-card)] border-[var(--c-border)] shadow-none" data-testid="dashboard-budget-empty">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-[#364C2E]" />
+              <Wallet className="w-4 h-4 text-[var(--c-primary)]" />
               <h3 className="text-lg font-medium" style={{ fontFamily: "Work Sans" }}>Budgets</h3>
             </div>
-            <p className="text-sm text-[#656C5A] mt-2">
+            <p className="text-sm text-[var(--c-muted)] mt-2">
               Set a monthly cap per category to track your spending against a target.
             </p>
           </div>
           <Link
             to="/budgets"
-            className="text-sm text-[#364C2E] flex items-center gap-1 hover:underline"
+            className="text-sm text-[var(--c-primary)] flex items-center gap-1 hover:underline"
             data-testid="dashboard-budget-cta"
           >
             Set budgets <ArrowRight className="w-3.5 h-3.5" />
@@ -62,20 +62,20 @@ export default function BudgetSummary({ projectId, year, month }) {
   const onTrack = items.filter((i) => i.status === "ok").length;
 
   return (
-    <Card className="p-6 bg-white border-[#EAE3D9] shadow-none" data-testid="dashboard-budget-summary">
+    <Card className="p-6 bg-[var(--c-card)] border-[var(--c-border)] shadow-none" data-testid="dashboard-budget-summary">
       <div className="flex items-start justify-between mb-4">
         <div>
           <div className="flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-[#364C2E]" />
+            <Wallet className="w-4 h-4 text-[var(--c-primary)]" />
             <h3 className="text-lg font-medium" style={{ fontFamily: "Work Sans" }}>Budgets</h3>
           </div>
-          <p className="text-xs text-[#656C5A] mt-0.5">
+          <p className="text-xs text-[var(--c-muted)] mt-0.5">
             {onTrack} on track · {overCount > 0 ? `${overCount} over` : "all under cap"}
           </p>
         </div>
         <Link
           to="/budgets"
-          className="text-sm text-[#364C2E] flex items-center gap-1 hover:underline"
+          className="text-sm text-[var(--c-primary)] flex items-center gap-1 hover:underline"
           data-testid="dashboard-budget-manage"
         >
           Manage <ArrowRight className="w-3.5 h-3.5" />
@@ -90,13 +90,13 @@ export default function BudgetSummary({ projectId, year, month }) {
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.category_color }} />
-                  <span className="truncate text-[#1F2E1B]">{p.category_name}</span>
+                  <span className="truncate text-[var(--c-ink)]">{p.category_name}</span>
                 </div>
-                <span className="text-xs text-[#656C5A] tabular-nums">
+                <span className="text-xs text-[var(--c-muted)] tabular-nums">
                   {formatGBP(p.spent)} / {formatGBP(p.effective_amount)}
                 </span>
               </div>
-              <div className="h-1.5 bg-[#EAE3D9] rounded-full mt-1.5 overflow-hidden">
+              <div className="h-1.5 bg-[var(--c-border)] rounded-full mt-1.5 overflow-hidden">
                 <div
                   className={`h-full ${STATUS[p.status]} transition-all duration-500`}
                   style={{ width: `${width}%` }}

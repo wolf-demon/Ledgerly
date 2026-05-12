@@ -9,8 +9,9 @@ import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { Plus, Trash2, Edit3 } from "lucide-react";
 import { toast } from "sonner";
+import ColorPicker, { CATEGORY_COLORS } from "../components/ColorPicker";
 
-const PALETTE = ["#364C2E", "#4B6B40", "#728A66", "#D96C4E", "#D1A77E", "#E3C8AA", "#8B5E3C", "#9E7B58"];
+const DEFAULT_COLOR = CATEGORY_COLORS[0];
 
 export default function Categories() {
   const { active } = useProject();
@@ -18,7 +19,7 @@ export default function Categories() {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: "", type: "expense", color: PALETTE[0], parent_id: "" });
+  const [form, setForm] = useState({ name: "", type: "expense", color: DEFAULT_COLOR, parent_id: "" });
 
   const load = useCallback(async () => {
     if (!active) return;
@@ -30,11 +31,11 @@ export default function Categories() {
     load();
   }, [load]);
 
-  if (!active) return <div className="text-[#656C5A]">Create or select a project first.</div>;
+  if (!active) return <div className="text-[var(--c-muted)]">Create or select a project first.</div>;
 
   const openNew = (preset = {}) => {
     setEditing(null);
-    setForm({ name: "", type: "expense", color: PALETTE[0], parent_id: "", ...preset });
+    setForm({ name: "", type: "expense", color: DEFAULT_COLOR, parent_id: "", ...preset });
     setOpen(true);
   };
 
@@ -105,39 +106,39 @@ export default function Categories() {
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-[#656C5A]">Organization</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-muted)]">Organization</p>
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-1" style={{ fontFamily: "Work Sans" }}>
             Categories
           </h1>
-          <p className="text-[#656C5A] mt-1 text-sm">Group income and expenses. Add sub-categories (one level deep) — their spending rolls up to the parent in budgets and reports.</p>
+          <p className="text-[var(--c-muted)] mt-1 text-sm">Group income and expenses. Add sub-categories (one level deep) — their spending rolls up to the parent in budgets and reports.</p>
         </div>
-        <Button onClick={() => openNew()} data-testid="new-category-btn" className="bg-[#364C2E] hover:bg-[#22331D] text-white">
+        <Button onClick={() => openNew()} data-testid="new-category-btn" className="bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)]">
           <Plus className="w-4 h-4 mr-1.5" /> New category
         </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {["income", "expense"].map((type) => (
-          <Card key={type} className="p-6 bg-white border-[#EAE3D9] shadow-none">
+          <Card key={type} className="p-6 bg-[var(--c-card)] border-[var(--c-border)] shadow-none">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium capitalize" style={{ fontFamily: "Work Sans" }}>{type}</h3>
-              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${type === "income" ? "bg-[#4B6B40]/10 text-[#4B6B40]" : "bg-[#D96C4E]/10 text-[#D96C4E]"}`}>
+              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${type === "income" ? "bg-[color-mix(in_srgb,var(--c-success)_10%,transparent)] text-[var(--c-success)]" : "bg-[color-mix(in_srgb,var(--c-danger)_10%,transparent)] text-[var(--c-danger)]"}`}>
                 {tree[type].reduce((s, t) => s + 1 + t.children.length, 0)}
               </span>
             </div>
             <div className="space-y-2" data-testid={`categories-list-${type}`}>
-              {tree[type].length === 0 && <p className="text-sm text-[#656C5A]">No categories yet.</p>}
+              {tree[type].length === 0 && <p className="text-sm text-[var(--c-muted)]">No categories yet.</p>}
               {tree[type].map((c) => (
                 <div key={c.id} className="space-y-1">
                   <div
-                    className="flex items-center justify-between px-4 py-3 rounded-md border border-[#EAE3D9]/70 hover:border-[#D1A77E] hover:bg-[#F4EBE1]/30 transition-all"
+                    className="flex items-center justify-between px-4 py-3 rounded-md border border-[color-mix(in_srgb,var(--c-border)_70%,transparent)] hover:border-[var(--c-accent)] hover:bg-[color-mix(in_srgb,var(--c-surface)_30%,transparent)] transition-all"
                     data-testid={`category-row-${c.id}`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
                       <span className="truncate font-medium">{c.name}</span>
                       {c.children.length > 0 && (
-                        <span className="text-xs text-[#656C5A] bg-[#F4EBE1] rounded-full px-2 py-0.5">
+                        <span className="text-xs text-[var(--c-muted)] bg-[var(--c-surface)] rounded-full px-2 py-0.5">
                           {c.children.length} sub
                         </span>
                       )}
@@ -154,7 +155,7 @@ export default function Categories() {
                       <Button size="sm" variant="ghost" onClick={() => openEdit(c)} data-testid={`edit-cat-${c.id}`}>
                         <Edit3 className="w-4 h-4" />
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => remove(c)} data-testid={`delete-cat-${c.id}`} className="text-[#D96C4E] hover:bg-[#D96C4E]/10">
+                      <Button size="sm" variant="ghost" onClick={() => remove(c)} data-testid={`delete-cat-${c.id}`} className="text-[var(--c-danger)] hover:bg-[color-mix(in_srgb,var(--c-danger)_10%,transparent)]">
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
@@ -162,7 +163,7 @@ export default function Categories() {
                   {c.children.map((child) => (
                     <div
                       key={child.id}
-                      className="flex items-center justify-between pl-8 pr-3 py-2 rounded-md border border-[#EAE3D9]/40 ml-6 bg-[#FAF7F2] hover:bg-[#F4EBE1]/40 transition-all"
+                      className="flex items-center justify-between pl-8 pr-3 py-2 rounded-md border border-[color-mix(in_srgb,var(--c-border)_40%,transparent)] ml-6 bg-[var(--c-bg-alt)] hover:bg-[color-mix(in_srgb,var(--c-surface)_40%,transparent)] transition-all"
                       data-testid={`category-row-${child.id}`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -173,7 +174,7 @@ export default function Categories() {
                         <Button size="sm" variant="ghost" onClick={() => openEdit(child)} data-testid={`edit-cat-${child.id}`}>
                           <Edit3 className="w-3.5 h-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => remove(child)} data-testid={`delete-cat-${child.id}`} className="text-[#D96C4E] hover:bg-[#D96C4E]/10">
+                        <Button size="sm" variant="ghost" onClick={() => remove(child)} data-testid={`delete-cat-${child.id}`} className="text-[var(--c-danger)] hover:bg-[color-mix(in_srgb,var(--c-danger)_10%,transparent)]">
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -187,7 +188,7 @@ export default function Categories() {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-white border-[#EAE3D9]">
+        <DialogContent className="bg-[var(--c-card)] border-[var(--c-border)]">
           <DialogHeader>
             <DialogTitle style={{ fontFamily: "Work Sans" }}>{editing ? "Edit category" : "New category"}</DialogTitle>
           </DialogHeader>
@@ -208,7 +209,7 @@ export default function Categories() {
                     key={t} data-testid={`category-type-${t}`} type="button"
                     onClick={() => setForm({ ...form, type: t, parent_id: "" })}
                     className={`flex-1 px-3 py-2 rounded-md text-sm border transition-colors ${
-                      form.type === t ? "bg-[#364C2E] text-white border-[#364C2E]" : "bg-white border-[#EAE3D9] hover:bg-[#F4EBE1]"
+                      form.type === t ? "bg-[var(--c-primary)] text-[var(--c-on-primary)] border-[var(--c-primary)]" : "bg-[var(--c-card)] border-[var(--c-border)] hover:bg-[var(--c-surface)]"
                     }`}
                   >
                     {t}
@@ -222,33 +223,27 @@ export default function Categories() {
                 value={form.parent_id}
                 onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
                 data-testid="category-parent-select"
-                className="w-full h-9 px-3 bg-white border border-[#EAE3D9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#364C2E]/20"
+                className="w-full h-9 px-3 bg-[var(--c-card)] border border-[var(--c-border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--c-primary)_20%,transparent)]"
               >
                 <option value="">Top-level category</option>
                 {availableParents.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
-              <p className="text-xs text-[#656C5A]">Sub-categories roll up to the parent in budgets and reports.</p>
+              <p className="text-xs text-[var(--c-muted)]">Sub-categories roll up to the parent in budgets and reports.</p>
             </div>
             <div className="space-y-2">
               <Label>Color</Label>
-              <div className="flex flex-wrap gap-2">
-                {PALETTE.map((p) => (
-                  <button
-                    key={p} type="button" data-testid={`color-${p}`}
-                    onClick={() => setForm({ ...form, color: p })}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${form.color === p ? "border-[#1F2E1B] scale-110" : "border-transparent"}`}
-                    style={{ backgroundColor: p }}
-                    aria-label={`Pick ${p}`}
-                  />
-                ))}
-              </div>
+              <ColorPicker
+                value={form.color}
+                onChange={(c) => setForm({ ...form, color: c })}
+                testId="category-color-picker"
+              />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} data-testid="cancel-category-btn">Cancel</Button>
-            <Button onClick={save} className="bg-[#364C2E] hover:bg-[#22331D] text-white" data-testid="save-category-btn">
+            <Button onClick={save} className="bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)]" data-testid="save-category-btn">
               {editing ? "Save" : "Create"}
             </Button>
           </DialogFooter>

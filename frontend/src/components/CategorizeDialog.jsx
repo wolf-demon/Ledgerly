@@ -72,21 +72,21 @@ export default function CategorizeDialog({ open, onOpenChange, transaction, cate
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-white border-[#EAE3D9] max-w-lg">
+      <DialogContent className="bg-[var(--c-card)] border-[var(--c-border)] max-w-lg">
         <DialogHeader>
           <DialogTitle style={{ fontFamily: "Work Sans" }}>Categorize transaction</DialogTitle>
-          <DialogDescription className="text-[#656C5A]">
+          <DialogDescription className="text-[var(--c-muted)]">
             Assign a category. Optionally apply to all similar transactions and remember the rule.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="rounded-md bg-[#F4EBE1]/50 border border-[#EAE3D9] p-4">
-            <div className="text-xs uppercase tracking-[0.18em] text-[#656C5A]">Transaction</div>
+          <div className="rounded-md bg-[color-mix(in_srgb,var(--c-surface)_50%,transparent)] border border-[var(--c-border)] p-4">
+            <div className="text-xs uppercase tracking-[0.18em] text-[var(--c-muted)]">Transaction</div>
             <div className="mt-1 font-medium" data-testid="categorize-tx-description">{transaction.description}</div>
             <div className="flex items-center justify-between mt-2 text-sm">
-              <span className="text-[#656C5A]">{transaction.date}</span>
-              <span className={isIncome ? "text-[#4B6B40] font-semibold" : "text-[#D96C4E] font-semibold"}>
+              <span className="text-[var(--c-muted)]">{transaction.date}</span>
+              <span className={isIncome ? "text-[var(--c-success)] font-semibold" : "text-[var(--c-danger)] font-semibold"}>
                 {formatGBP(transaction.amount)}
               </span>
             </div>
@@ -98,29 +98,29 @@ export default function CategorizeDialog({ open, onOpenChange, transaction, cate
             onClick={fetchSuggestion}
             disabled={loadingSuggest}
             data-testid="ai-suggest-btn"
-            className="w-full border-[#EAE3D9] hover:bg-[#F4EBE1]"
+            className="w-full border-[var(--c-border)] hover:bg-[var(--c-surface)]"
           >
             {loadingSuggest ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
-              <Sparkles className="w-4 h-4 mr-2 text-[#364C2E]" />
+              <Sparkles className="w-4 h-4 mr-2 text-[var(--c-primary)]" />
             )}
             {loadingSuggest ? "Thinking..." : "Suggest with AI"}
           </Button>
 
           {suggestion && (
-            <div className="rounded-md border border-[#D1A77E]/40 bg-[#FDFBF7] p-3 text-sm" data-testid="ai-suggestion-panel">
+            <div className="rounded-md border border-[color-mix(in_srgb,var(--c-accent)_40%,transparent)] bg-[var(--c-bg)] p-3 text-sm" data-testid="ai-suggestion-panel">
               {suggestion.suggested_name ? (
                 <>
                   <div className="font-medium">
-                    AI suggests: <span className="text-[#364C2E]">{suggestion.suggested_name}</span>
+                    AI suggests: <span className="text-[var(--c-primary)]">{suggestion.suggested_name}</span>
                   </div>
                   {suggestion.reason && (
-                    <div className="text-[#656C5A] mt-1 text-xs">{suggestion.reason}</div>
+                    <div className="text-[var(--c-muted)] mt-1 text-xs">{suggestion.reason}</div>
                   )}
                 </>
               ) : (
-                <div className="text-[#656C5A]">
+                <div className="text-[var(--c-muted)]">
                   AI couldn’t pick a confident match. {suggestion.reason}
                 </div>
               )}
@@ -138,8 +138,8 @@ export default function CategorizeDialog({ open, onOpenChange, transaction, cate
                   data-testid={`category-pick-${c.id}`}
                   className={`text-left px-3 py-2 rounded-md border text-sm transition-all ${
                     selected === c.id
-                      ? "border-[#364C2E] bg-[#364C2E] text-white"
-                      : "border-[#EAE3D9] hover:border-[#D1A77E]"
+                      ? "border-[var(--c-primary)] bg-[var(--c-primary)] text-[var(--c-on-primary)]"
+                      : "border-[var(--c-border)] hover:border-[var(--c-accent)]"
                   }`}
                 >
                   <span className="inline-block w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: c.color }} />
@@ -147,7 +147,7 @@ export default function CategorizeDialog({ open, onOpenChange, transaction, cate
                 </button>
               ))}
               {filteredCats.length === 0 && (
-                <div className="col-span-2 text-sm text-[#656C5A]">
+                <div className="col-span-2 text-sm text-[var(--c-muted)]">
                   No {isIncome ? "income" : "expense"} categories yet. Create one in Categories.
                 </div>
               )}
@@ -162,7 +162,7 @@ export default function CategorizeDialog({ open, onOpenChange, transaction, cate
             />
             <div className="text-sm">
               <div>Remember this for similar transactions</div>
-              <div className="text-xs text-[#656C5A]">
+              <div className="text-xs text-[var(--c-muted)]">
                 Future and existing transactions matching this merchant will be auto-categorized.
               </div>
             </div>
@@ -177,7 +177,7 @@ export default function CategorizeDialog({ open, onOpenChange, transaction, cate
             onClick={save}
             disabled={saving}
             data-testid="save-categorize-btn"
-            className="bg-[#364C2E] hover:bg-[#22331D] text-white"
+            className="bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)]"
           >
             {saving ? "Saving..." : "Save"}
           </Button>

@@ -28,7 +28,7 @@ export default function Recurring() {
     load();
   }, [load]);
 
-  if (!active) return <div className="text-[#656C5A]">Create or select a project first.</div>;
+  if (!active) return <div className="text-[var(--c-muted)]">Create or select a project first.</div>;
 
   const expense = (data?.recurring || []).filter((r) => r.type === "expense");
   const income = (data?.recurring || []).filter((r) => r.type === "income");
@@ -37,37 +37,37 @@ export default function Recurring() {
   const Row = ({ r }) => (
     <div
       data-testid={`recurring-row-${r.merchant_key}`}
-      className="grid grid-cols-12 gap-3 items-center px-4 py-3 rounded-md border border-[#EAE3D9]/70 hover:border-[#D1A77E] hover:bg-[#F4EBE1]/30 transition-all"
+      className="grid grid-cols-12 gap-3 items-center px-4 py-3 rounded-md border border-[color-mix(in_srgb,var(--c-border)_70%,transparent)] hover:border-[var(--c-accent)] hover:bg-[color-mix(in_srgb,var(--c-surface)_30%,transparent)] transition-all"
     >
       <div className="col-span-5 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: r.category_color }} />
           <span className="font-medium truncate" title={r.sample_description}>{r.sample_description}</span>
         </div>
-        <div className="text-xs text-[#656C5A] mt-0.5 flex items-center gap-2">
+        <div className="text-xs text-[var(--c-muted)] mt-0.5 flex items-center gap-2">
           <span>{r.category_name}</span>
-          <span className="text-[#D1A77E]">•</span>
+          <span className="text-[var(--c-accent)]">•</span>
           <span className="capitalize">{r.cadence}</span>
-          <span className="text-[#D1A77E]">•</span>
+          <span className="text-[var(--c-accent)]">•</span>
           <span>{r.occurrences} hits</span>
         </div>
       </div>
-      <div className="col-span-3 text-xs text-[#656C5A]">
+      <div className="col-span-3 text-xs text-[var(--c-muted)]">
         <div className="flex items-center gap-1.5">
           <Calendar className="w-3.5 h-3.5" />
-          Next: <span className="text-[#1F2E1B] font-medium">{r.next_expected}</span>
+          Next: <span className="text-[var(--c-ink)] font-medium">{r.next_expected}</span>
         </div>
         <div className="mt-0.5">Last: {r.last_seen}</div>
       </div>
       <div className="col-span-2 text-right text-sm">
-        <div className="text-[#656C5A] text-xs">Avg</div>
-        <div className={`font-medium ${r.avg_amount >= 0 ? "text-[#4B6B40]" : "text-[#D96C4E]"}`}>
+        <div className="text-[var(--c-muted)] text-xs">Avg</div>
+        <div className={`font-medium ${r.avg_amount >= 0 ? "text-[var(--c-success)]" : "text-[var(--c-danger)]"}`}>
           {formatGBP(r.avg_amount)}
         </div>
       </div>
       <div className="col-span-2 text-right text-sm">
-        <div className="text-[#656C5A] text-xs">Per month</div>
-        <div className={`font-semibold ${r.monthly_estimate >= 0 ? "text-[#4B6B40]" : "text-[#D96C4E]"}`} style={{ fontFamily: "Work Sans" }}>
+        <div className="text-[var(--c-muted)] text-xs">Per month</div>
+        <div className={`font-semibold ${r.monthly_estimate >= 0 ? "text-[var(--c-success)]" : "text-[var(--c-danger)]"}`} style={{ fontFamily: "Work Sans" }}>
           {formatGBP(r.monthly_estimate)}
         </div>
       </div>
@@ -78,21 +78,21 @@ export default function Recurring() {
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-[#656C5A]">Insights</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-muted)]">Insights</p>
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-1" style={{ fontFamily: "Work Sans" }}>
             Recurring & forecast
           </h1>
-          <p className="text-[#656C5A] mt-1 text-sm flex items-center gap-1.5">
+          <p className="text-[var(--c-muted)] mt-1 text-sm flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" /> Detected merchants that repeat monthly/weekly. Used to forecast your typical month.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-[0.2em] text-[#656C5A]">Lookback</span>
+          <span className="text-xs uppercase tracking-[0.2em] text-[var(--c-muted)]">Lookback</span>
           <select
             value={lookback}
             onChange={(e) => setLookback(Number(e.target.value))}
             data-testid="recurring-lookback-select"
-            className="bg-white border border-[#EAE3D9] rounded-md px-3 py-1.5 text-sm focus:outline-none"
+            className="bg-[var(--c-card)] border border-[var(--c-border)] rounded-md px-3 py-1.5 text-sm focus:outline-none"
           >
             <option value={3}>3 months</option>
             <option value={6}>6 months</option>
@@ -113,20 +113,20 @@ export default function Recurring() {
           { label: "Forecast monthly net", value: fc.monthly_net, tone: fc.monthly_net >= 0 ? "income" : "expense", icon: Repeat },
         ].map((s) => (
           <motion.div key={s.label} variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}>
-            <Card className="p-6 bg-white border-[#EAE3D9] shadow-none">
+            <Card className="p-6 bg-[var(--c-card)] border-[var(--c-border)] shadow-none">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#656C5A]">{s.label}</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--c-muted)]">{s.label}</p>
                   <p
-                    className={`text-2xl font-semibold mt-2 ${s.tone === "income" ? "text-[#4B6B40]" : "text-[#D96C4E]"}`}
+                    className={`text-2xl font-semibold mt-2 ${s.tone === "income" ? "text-[var(--c-success)]" : "text-[var(--c-danger)]"}`}
                     style={{ fontFamily: "Work Sans" }}
                   >
                     {formatGBP(s.value)}
                   </p>
-                  <p className="text-xs text-[#656C5A] mt-1">Based on last {lookback} months</p>
+                  <p className="text-xs text-[var(--c-muted)] mt-1">Based on last {lookback} months</p>
                 </div>
                 <div className={`w-9 h-9 rounded-md flex items-center justify-center ${
-                  s.tone === "income" ? "bg-[#4B6B40]/10 text-[#4B6B40]" : "bg-[#D96C4E]/10 text-[#D96C4E]"
+                  s.tone === "income" ? "bg-[color-mix(in_srgb,var(--c-success)_10%,transparent)] text-[var(--c-success)]" : "bg-[color-mix(in_srgb,var(--c-danger)_10%,transparent)] text-[var(--c-danger)]"
                 }`}>
                   <s.icon className="w-5 h-5" />
                 </div>
@@ -136,17 +136,17 @@ export default function Recurring() {
         ))}
       </motion.div>
 
-      {loading && <div className="text-[#656C5A]">Analyzing patterns...</div>}
+      {loading && <div className="text-[var(--c-muted)]">Analyzing patterns...</div>}
 
       {!loading && (
         <>
-          <Card className="p-6 bg-white border-[#EAE3D9] shadow-none">
+          <Card className="p-6 bg-[var(--c-card)] border-[var(--c-border)] shadow-none">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium" style={{ fontFamily: "Work Sans" }}>Recurring expenses</h3>
-              <span className="text-xs text-[#656C5A]">{expense.length} merchants</span>
+              <span className="text-xs text-[var(--c-muted)]">{expense.length} merchants</span>
             </div>
             {expense.length === 0 ? (
-              <p className="text-sm text-[#656C5A]" data-testid="empty-recurring-expense">
+              <p className="text-sm text-[var(--c-muted)]" data-testid="empty-recurring-expense">
                 No recurring expenses detected yet. Upload at least 2 months of statements.
               </p>
             ) : (
@@ -156,13 +156,13 @@ export default function Recurring() {
             )}
           </Card>
 
-          <Card className="p-6 bg-white border-[#EAE3D9] shadow-none">
+          <Card className="p-6 bg-[var(--c-card)] border-[var(--c-border)] shadow-none">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium" style={{ fontFamily: "Work Sans" }}>Recurring income</h3>
-              <span className="text-xs text-[#656C5A]">{income.length} merchants</span>
+              <span className="text-xs text-[var(--c-muted)]">{income.length} merchants</span>
             </div>
             {income.length === 0 ? (
-              <p className="text-sm text-[#656C5A]" data-testid="empty-recurring-income">
+              <p className="text-sm text-[var(--c-muted)]" data-testid="empty-recurring-income">
                 No recurring income detected yet.
               </p>
             ) : (

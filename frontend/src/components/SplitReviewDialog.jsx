@@ -101,63 +101,63 @@ export default function SplitReviewDialog({ open, onOpenChange, projectId, categ
   return (
     <>
       <Dialog open={open && !editingSplit} onOpenChange={onOpenChange}>
-        <DialogContent className="bg-white border-[#EAE3D9] max-w-xl" data-testid="split-review-dialog">
+        <DialogContent className="bg-[var(--c-card)] border-[var(--c-border)] max-w-xl" data-testid="split-review-dialog">
           <DialogHeader>
             <DialogTitle style={{ fontFamily: "Work Sans" }} className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#364C2E]" /> Review AI-suggested splits
+              <Sparkles className="w-4 h-4 text-[var(--c-primary)]" /> Review AI-suggested splits
             </DialogTitle>
           </DialogHeader>
 
           {loading ? (
-            <div className="py-12 text-center text-[#656C5A]">
+            <div className="py-12 text-center text-[var(--c-muted)]">
               <Wand2 className="w-5 h-5 mx-auto mb-2 animate-pulse" />
               Looking for multi-category transactions…
             </div>
           ) : current ? (
             <div className="space-y-4 py-2">
-              <div className="flex items-center justify-between text-xs text-[#656C5A]">
+              <div className="flex items-center justify-between text-xs text-[var(--c-muted)]">
                 <span>Candidate {index + 1} of {total}</span>
                 <span>
                   {applied} applied · {skipped} skipped
                 </span>
               </div>
 
-              <div className="rounded-md border border-[#EAE3D9] bg-[#FAF7F2] px-4 py-3">
-                <p className="font-medium text-[#1F2E1B]" data-testid="review-tx-desc">{current.transaction.description}</p>
-                <p className="text-sm text-[#656C5A]">
+              <div className="rounded-md border border-[var(--c-border)] bg-[var(--c-bg-alt)] px-4 py-3">
+                <p className="font-medium text-[var(--c-ink)]" data-testid="review-tx-desc">{current.transaction.description}</p>
+                <p className="text-sm text-[var(--c-muted)]">
                   {current.transaction.date} ·{" "}
-                  <span className={current.transaction.amount >= 0 ? "text-[#4B6B40]" : "text-[#D96C4E]"}>
+                  <span className={current.transaction.amount >= 0 ? "text-[var(--c-success)]" : "text-[var(--c-danger)]"}>
                     {formatGBP(current.transaction.amount)}
                   </span>
                 </p>
                 {current.reason && (
-                  <p className="text-xs text-[#728A66] mt-2 italic">
+                  <p className="text-xs text-[var(--c-primary-soft)] mt-2 italic">
                     AI reasoning: {current.reason}
                   </p>
                 )}
                 {current.auto_balanced && (
-                  <p className="text-[10px] uppercase tracking-wide text-[#D1A77E] mt-1" data-testid="review-auto-balanced">
+                  <p className="text-[10px] uppercase tracking-wide text-[var(--c-accent)] mt-1" data-testid="review-auto-balanced">
                     Last line auto-balanced for rounding
                   </p>
                 )}
               </div>
 
               <div className="space-y-1.5">
-                <p className="text-xs uppercase tracking-wide text-[#656C5A]">Suggested split</p>
+                <p className="text-xs uppercase tracking-wide text-[var(--c-muted)]">Suggested split</p>
                 {current.splits.map((s, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between px-3 py-2 rounded-md border border-[#EAE3D9]/60"
+                    className="flex items-center justify-between px-3 py-2 rounded-md border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)]"
                     data-testid={`review-split-line-${i}`}
                   >
                     <div className="min-w-0">
-                      <p className={`text-sm ${s.category_known ? "" : "text-[#D96C4E]"}`}>
+                      <p className={`text-sm ${s.category_known ? "" : "text-[var(--c-danger)]"}`}>
                         {s.category_name}
                         {!s.category_known && (
                           <span className="ml-1 text-[10px] uppercase tracking-wide">(new — edit to map)</span>
                         )}
                       </p>
-                      {s.reason && <p className="text-xs text-[#728A66] truncate">{s.reason}</p>}
+                      {s.reason && <p className="text-xs text-[var(--c-primary-soft)] truncate">{s.reason}</p>}
                     </div>
                     <span className="tabular-nums font-medium">{formatGBP(s.amount)}</span>
                   </div>
@@ -170,21 +170,21 @@ export default function SplitReviewDialog({ open, onOpenChange, projectId, categ
             <DialogFooter className="flex-wrap gap-2">
               <Button
                 variant="outline" onClick={prev} disabled={index === 0}
-                className="border-[#EAE3D9]"
+                className="border-[var(--c-border)]"
                 data-testid="review-prev"
               >
                 <ChevronLeft className="w-4 h-4" /> Prev
               </Button>
               <Button
                 variant="outline" onClick={skip}
-                className="border-[#EAE3D9]"
+                className="border-[var(--c-border)]"
                 data-testid="review-skip"
               >
                 <SkipForward className="w-4 h-4 mr-1.5" /> Skip
               </Button>
               <Button
                 variant="outline" onClick={() => setEditingSplit(true)}
-                className="border-[#EAE3D9]"
+                className="border-[var(--c-border)]"
                 data-testid="review-edit"
               >
                 Edit before applying
@@ -192,7 +192,7 @@ export default function SplitReviewDialog({ open, onOpenChange, projectId, categ
               <Button
                 onClick={accept}
                 disabled={current.splits.filter((s) => s.category_known).length < 2}
-                className="bg-[#364C2E] hover:bg-[#22331D] text-white disabled:opacity-50 ml-auto"
+                className="bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)] disabled:opacity-50 ml-auto"
                 data-testid="review-confirm"
               >
                 Confirm split <ChevronRight className="w-4 h-4 ml-1" />

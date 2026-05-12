@@ -5,6 +5,7 @@ import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { ProjectProvider } from "./lib/projectContext";
 import { BankAccountProvider } from "./lib/bankAccountContext";
+import { ThemeProvider } from "./lib/themeContext";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import Layout from "./components/Layout";
 import NewProjectDialog from "./components/NewProjectDialog";
@@ -76,23 +77,25 @@ function App() {
   return (
     <div className="App">
       <Router>
-        <ProjectProvider>
-          <BankAccountProvider>
-            <ConfirmProvider>
-              <Shell />
-              <Toaster
-                position="top-right"
-                toastOptions={{
-                  style: {
-                    background: "#FFFFFF",
-                    border: "1px solid #EAE3D9",
-                    color: "#1F2E1B",
-                  },
-                }}
-              />
-            </ConfirmProvider>
-          </BankAccountProvider>
-        </ProjectProvider>
+        <ThemeProvider>
+          <ProjectProvider>
+            <BankAccountProvider>
+              <ConfirmProvider>
+                <Shell />
+                <Toaster
+                  position="top-right"
+                  toastOptions={{
+                    style: {
+                      background: "var(--c-card)",
+                      border: "1px solid var(--c-border)",
+                      color: "var(--c-ink)",
+                    },
+                  }}
+                />
+              </ConfirmProvider>
+            </BankAccountProvider>
+          </ProjectProvider>
+        </ThemeProvider>
       </Router>
     </div>
   );

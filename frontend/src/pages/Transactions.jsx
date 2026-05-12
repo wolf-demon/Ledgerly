@@ -142,7 +142,7 @@ export default function Transactions() {
   }, [filtered, groupMode]);
 
   if (!active) {
-    return <div className="text-[#656C5A]">Create or select a project first.</div>;
+    return <div className="text-[var(--c-muted)]">Create or select a project first.</div>;
   }
 
   const allSelected = filtered.length > 0 && filtered.every((t) => selected.has(t.id));
@@ -289,23 +289,23 @@ export default function Transactions() {
     return (
       <React.Fragment key={t.id}>
         <tr
-          className={`border-b border-[#EAE3D9]/50 transition-colors ${
-            isSel ? "bg-[#F4EBE1]/50" : isSplitParent ? "bg-[#F4EBE1]/20 opacity-80" : "hover:bg-[#F4EBE1]/30"
-          } ${indent ? "bg-[#FAF7F2]" : ""}`}
+          className={`border-b border-[color-mix(in_srgb,var(--c-border)_50%,transparent)] transition-colors ${
+            isSel ? "bg-[color-mix(in_srgb,var(--c-surface)_50%,transparent)]" : isSplitParent ? "bg-[color-mix(in_srgb,var(--c-surface)_20%,transparent)] opacity-80" : "hover:bg-[color-mix(in_srgb,var(--c-surface)_30%,transparent)]"
+          } ${indent ? "bg-[var(--c-bg-alt)]" : ""}`}
         >
           <td className="py-3 px-4">
             {!indent && (
               <Checkbox checked={isSel} onCheckedChange={() => toggle(t.id)} data-testid={`select-tx-${t.id}`} />
             )}
           </td>
-          <td className="py-3 px-4 text-[#656C5A] whitespace-nowrap text-xs">
+          <td className="py-3 px-4 text-[var(--c-muted)] whitespace-nowrap text-xs">
             <div className="flex items-center gap-1">
-              {indent && <span className="text-[#9E988C] mr-1">↳</span>}
+              {indent && <span className="text-[var(--c-muted-2)] mr-1">↳</span>}
               {isSplitParent && (
                 <button
                   type="button"
                   onClick={() => toggleParentExpanded(t.id)}
-                  className="text-[#656C5A] hover:text-[#1F2E1B]"
+                  className="text-[var(--c-muted)] hover:text-[var(--c-ink)]"
                   data-testid={`toggle-split-${t.id}`}
                 >
                   {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
@@ -326,14 +326,14 @@ export default function Transactions() {
                 {acct.name}
               </span>
             ) : (
-              <span className="inline-block text-xs text-[#656C5A]">—</span>
+              <span className="inline-block text-xs text-[var(--c-muted)]">—</span>
             )}
           </td>
           <td className="py-3 px-4 max-w-md truncate" title={t.description}>
             <span className={indent ? "text-sm" : ""}>{t.description}</span>
             {isSplitParent && (
               <span
-                className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-[#728A66]/15 text-[#728A66]"
+                className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-[color-mix(in_srgb,var(--c-primary-soft)_15%,transparent)] text-[var(--c-primary-soft)]"
                 data-testid={`split-chip-${t.id}`}
               >
                 <Scissors className="w-3 h-3" /> Split into {children.length || "…"}
@@ -350,17 +350,17 @@ export default function Transactions() {
                 {cat.name}
               </span>
             ) : isSplitParent ? (
-              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-[#728A66]/15 text-[#728A66]">
+              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-[color-mix(in_srgb,var(--c-primary-soft)_15%,transparent)] text-[var(--c-primary-soft)]">
                 Split parent
               </span>
             ) : (
-              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-[#F4EBE1] text-[#656C5A]">
+              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-[var(--c-surface)] text-[var(--c-muted)]">
                 Uncategorized
               </span>
             )}
           </td>
           <td className={`py-3 px-4 text-right font-medium whitespace-nowrap ${
-            isSplitParent ? "text-[#656C5A] line-through" : (t.amount >= 0 ? "text-[#4B6B40]" : "text-[#D96C4E]")
+            isSplitParent ? "text-[var(--c-muted)] line-through" : (t.amount >= 0 ? "text-[var(--c-success)]" : "text-[var(--c-danger)]")
           }`}>
             {formatGBP(t.amount)}
           </td>
@@ -370,7 +370,7 @@ export default function Transactions() {
                 <Button
                   size="sm" variant="ghost" data-testid={`split-btn-${t.id}`}
                   onClick={() => startSplit(t)}
-                  className="hover:bg-[#F4EBE1]"
+                  className="hover:bg-[var(--c-surface)]"
                   title="Split into multiple categories"
                 >
                   <Scissors className="w-4 h-4" />
@@ -380,7 +380,7 @@ export default function Transactions() {
                 <Button
                   size="sm" variant="ghost" data-testid={`unsplit-btn-${t.id}`}
                   onClick={() => unsplit(t)}
-                  className="hover:bg-[#D96C4E]/10 text-[#D96C4E]"
+                  className="hover:bg-[color-mix(in_srgb,var(--c-danger)_10%,transparent)] text-[var(--c-danger)]"
                   title="Remove split"
                 >
                   <X className="w-4 h-4" />
@@ -390,7 +390,7 @@ export default function Transactions() {
                 <Button
                   size="sm" variant="ghost" data-testid={`categorize-btn-${t.id}`}
                   onClick={() => { setEditing(t); setOpen(true); }}
-                  className="hover:bg-[#F4EBE1]"
+                  className="hover:bg-[var(--c-surface)]"
                 >
                   <Tag className="w-4 h-4" />
                 </Button>
@@ -398,7 +398,7 @@ export default function Transactions() {
               <Button
                 size="sm" variant="ghost" data-testid={`delete-tx-btn-${t.id}`}
                 onClick={() => remove(t.id)}
-                className="hover:bg-[#D96C4E]/10 text-[#D96C4E]"
+                className="hover:bg-[color-mix(in_srgb,var(--c-danger)_10%,transparent)] text-[var(--c-danger)]"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
@@ -415,7 +415,7 @@ export default function Transactions() {
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-[#656C5A]">Ledger</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-muted)]">Ledger</p>
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-1" style={{ fontFamily: "Work Sans" }}>
             Transactions
           </h1>
@@ -425,7 +425,7 @@ export default function Transactions() {
             onClick={autoCategorize}
             disabled={autoBusy}
             data-testid="auto-categorize-btn"
-            className="bg-[#364C2E] hover:bg-[#22331D] text-white"
+            className="bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)]"
           >
             {autoBusy ? (
               <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Categorizing…</>
@@ -437,25 +437,25 @@ export default function Transactions() {
             onClick={() => setAiSplitOpen(true)}
             data-testid="ai-split-btn"
             variant="outline"
-            className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
+            className="border-[var(--c-border)] hover:bg-[var(--c-surface)]"
             title="Use AI to suggest splits for multi-category transactions"
           >
             <Scissors className="w-4 h-4 mr-2" /> AI: detect splits
           </Button>
           <Button
             onClick={reclassify} variant="outline" data-testid="reclassify-btn"
-            className="border-[#EAE3D9] hover:bg-[#F4EBE1]"
+            className="border-[var(--c-border)] hover:bg-[var(--c-surface)]"
             title="Recompute income/expense type from each transaction's amount sign"
           >
             <RefreshCw className="w-4 h-4 mr-2" /> Re-classify
           </Button>
-          <Button onClick={exportCSV} variant="outline" data-testid="export-csv-btn" className="border-[#EAE3D9] hover:bg-[#F4EBE1]">
+          <Button onClick={exportCSV} variant="outline" data-testid="export-csv-btn" className="border-[var(--c-border)] hover:bg-[var(--c-surface)]">
             <Download className="w-4 h-4 mr-2" /> Export CSV
           </Button>
         </div>
       </div>
 
-      <Card className="p-4 bg-white border-[#EAE3D9] shadow-none">
+      <Card className="p-4 bg-[var(--c-card)] border-[var(--c-border)] shadow-none">
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <div className="flex items-center gap-2 flex-wrap">
             {[
@@ -465,14 +465,14 @@ export default function Transactions() {
               <button
                 key={b.k} data-testid={`filter-${b.k}`} onClick={() => setFilter(b.k)}
                 className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-                  filter === b.k ? "bg-[#364C2E] text-white" : "bg-[#F4EBE1] text-[#1F2E1B] hover:bg-[#EAE3D9]"
+                  filter === b.k ? "bg-[var(--c-primary)] text-[var(--c-on-primary)]" : "bg-[var(--c-surface)] text-[var(--c-ink)] hover:bg-[var(--c-border)]"
                 }`}
               >
                 {b.label}
               </button>
             ))}
-            <div className="w-px h-5 bg-[#EAE3D9] mx-1" />
-            <span className="text-xs uppercase tracking-wide text-[#656C5A]">Group by</span>
+            <div className="w-px h-5 bg-[var(--c-border)] mx-1" />
+            <span className="text-xs uppercase tracking-wide text-[var(--c-muted)]">Group by</span>
             {[
               { k: "flat", label: "None" },
               { k: "day", label: "Day" },
@@ -482,7 +482,7 @@ export default function Transactions() {
               <button
                 key={b.k} data-testid={`group-${b.k}`} onClick={() => setGroupMode(b.k)}
                 className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-                  groupMode === b.k ? "bg-[#364C2E] text-white" : "bg-[#F4EBE1] text-[#1F2E1B] hover:bg-[#EAE3D9]"
+                  groupMode === b.k ? "bg-[var(--c-primary)] text-[var(--c-on-primary)]" : "bg-[var(--c-surface)] text-[var(--c-ink)] hover:bg-[var(--c-border)]"
                 }`}
               >
                 {b.label}
@@ -490,10 +490,10 @@ export default function Transactions() {
             ))}
           </div>
           <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#656C5A]" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--c-muted)]" />
             <Input
               data-testid="tx-search" placeholder="Search description..." value={search}
-              onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-white border-[#EAE3D9]"
+              onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-[var(--c-card)] border-[var(--c-border)]"
             />
           </div>
         </div>
@@ -501,14 +501,14 @@ export default function Transactions() {
 
       {selected.size > 0 && (
         <div
-          className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-md bg-[#364C2E] text-white sticky top-4 z-10 shadow-lg"
+          className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-md bg-[var(--c-primary)] text-[var(--c-on-primary)] sticky top-4 z-10 shadow-lg"
           data-testid="bulk-actions-bar"
         >
           <span className="font-medium">{selected.size} selected</span>
-          <span className="text-white/40">|</span>
+          <span className="text-[var(--c-on-primary)]/40">|</span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" data-testid="bulk-categorize-btn" className="bg-white/15 hover:bg-white/25 text-white border-0">
+              <Button size="sm" data-testid="bulk-categorize-btn" className="bg-[var(--c-card)]/15 hover:bg-[var(--c-card)]/25 text-[var(--c-on-primary)] border-0">
                 <Wand2 className="w-4 h-4 mr-1.5" /> Categorize as...
               </Button>
             </DropdownMenuTrigger>
@@ -533,28 +533,28 @@ export default function Transactions() {
           <label className="flex items-center gap-2 text-xs cursor-pointer ml-1">
             <Checkbox
               checked={bulkApplyRule} onCheckedChange={(v) => setBulkApplyRule(!!v)} data-testid="bulk-apply-rule"
-              className="border-white/40 data-[state=checked]:bg-white data-[state=checked]:text-[#364C2E]"
+              className="border-white/40 data-[state=checked]:bg-[var(--c-card)] data-[state=checked]:text-[var(--c-primary)]"
             />
             Remember rule for similar
           </label>
-          <Button size="sm" onClick={bulkDelete} data-testid="bulk-delete-btn" className="bg-[#D96C4E] hover:bg-[#C0593E] text-white ml-auto">
+          <Button size="sm" onClick={bulkDelete} data-testid="bulk-delete-btn" className="bg-[var(--c-danger)] hover:bg-[var(--c-danger-deep)] text-[var(--c-on-primary)] ml-auto">
             <Trash2 className="w-4 h-4 mr-1.5" /> Delete
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} data-testid="bulk-clear-btn"
-            className="text-white/80 hover:bg-white/10 hover:text-white">
+            className="text-[var(--c-on-primary)]/80 hover:bg-[var(--c-card)]/10 hover:text-[var(--c-on-primary)]">
             <X className="w-4 h-4" />
           </Button>
         </div>
       )}
 
-      <Card className="bg-white border-[#EAE3D9] shadow-none overflow-hidden">
+      <Card className="bg-[var(--c-card)] border-[var(--c-border)] shadow-none overflow-hidden">
         {loading ? (
-          <div className="p-8 text-[#656C5A]">Loading transactions...</div>
+          <div className="p-8 text-[var(--c-muted)]">Loading transactions...</div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
-            <p className="text-[#656C5A]">No transactions{filter === "uncategorized" ? " need categorizing 🎉" : " yet"}.</p>
+            <p className="text-[var(--c-muted)]">No transactions{filter === "uncategorized" ? " need categorizing 🎉" : " yet"}.</p>
             <Link to="/upload">
-              <Button className="mt-4 bg-[#364C2E] hover:bg-[#22331D] text-white" data-testid="empty-upload-btn">
+              <Button className="mt-4 bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)]" data-testid="empty-upload-btn">
                 <UploadIcon className="w-4 h-4 mr-2" /> Upload statement
               </Button>
             </Link>
@@ -563,7 +563,7 @@ export default function Transactions() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="transactions-table">
               <thead>
-                <tr className="text-left text-[#656C5A] border-b border-[#EAE3D9]">
+                <tr className="text-left text-[var(--c-muted)] border-b border-[var(--c-border)]">
                   <th className="py-3 px-4 w-10">
                     <Checkbox checked={allSelected || (someSelected ? "indeterminate" : false)} onCheckedChange={toggleAll} data-testid="select-all-checkbox" />
                   </th>
@@ -579,12 +579,12 @@ export default function Transactions() {
                 {groups.map((g) => (
                   <React.Fragment key={g.key}>
                     {g.label && (
-                      <tr className="bg-[#F4EBE1]/40">
-                        <td colSpan={7} className="px-4 py-2 text-xs uppercase tracking-wide text-[#1F2E1B] flex items-center justify-between">
+                      <tr className="bg-[color-mix(in_srgb,var(--c-surface)_40%,transparent)]">
+                        <td colSpan={7} className="px-4 py-2 text-xs uppercase tracking-wide text-[var(--c-ink)] flex items-center justify-between">
                           <span className="font-semibold">{g.label}</span>
-                          <span className="text-[#656C5A] normal-case tracking-normal pl-4">
+                          <span className="text-[var(--c-muted)] normal-case tracking-normal pl-4">
                             {g.rows.length} {g.rows.length === 1 ? "tx" : "txs"} · net{" "}
-                            <span className={g.net >= 0 ? "text-[#4B6B40] font-medium" : "text-[#D96C4E] font-medium"}>
+                            <span className={g.net >= 0 ? "text-[var(--c-success)] font-medium" : "text-[var(--c-danger)] font-medium"}>
                               {formatGBP(g.net)}
                             </span>
                           </span>
@@ -616,10 +616,10 @@ export default function Transactions() {
       />
 
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <p className="text-xs text-[#656C5A] flex items-center gap-1.5">
+        <p className="text-xs text-[var(--c-muted)] flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5" /> Tip: split, categorize, group — and use the AI buttons to do it in bulk.
         </p>
-        <label className="text-xs text-[#656C5A] flex items-center gap-2 cursor-pointer">
+        <label className="text-xs text-[var(--c-muted)] flex items-center gap-2 cursor-pointer">
           <Checkbox
             checked={showSplitParents}
             onCheckedChange={(v) => setShowSplitParents(!!v)}

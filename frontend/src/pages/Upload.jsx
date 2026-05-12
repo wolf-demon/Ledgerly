@@ -32,7 +32,7 @@ export default function Upload() {
     if (active) reloadAccounts();
   }, [active, reloadAccounts]);
 
-  if (!active) return <div className="text-[#656C5A]">Create or select a project first.</div>;
+  if (!active) return <div className="text-[var(--c-muted)]">Create or select a project first.</div>;
 
   const upload = async (file) => {
     if (!file) return;
@@ -114,17 +114,17 @@ export default function Upload() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-[#656C5A]">Import</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-[var(--c-muted)]">Import</p>
         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-1" style={{ fontFamily: "Work Sans" }}>
           Upload bank statement
         </h1>
-        <p className="text-[#656C5A] mt-2 text-sm leading-relaxed">
+        <p className="text-[var(--c-muted)] mt-2 text-sm leading-relaxed">
           Drop a file or paste a Google Sheets link. We auto-detect dates, descriptions and amounts. Duplicates are skipped automatically.
         </p>
       </div>
 
       <Tabs defaultValue="file">
-        <TabsList className="bg-[#F4EBE1]">
+        <TabsList className="bg-[var(--c-surface)]">
           <TabsTrigger value="file" data-testid="upload-tab-file">
             <UploadCloud className="w-4 h-4 mr-1.5" /> Upload file
           </TabsTrigger>
@@ -138,15 +138,15 @@ export default function Upload() {
             (useful for CSV/Excel files where there's no sort code to detect,
             or when a statement uses an unrecognised format). */}
         {accounts.length > 0 && (
-          <Card className="mt-4 p-4 bg-white border-[#EAE3D9] shadow-none">
-            <Label className="text-xs uppercase tracking-wide text-[#656C5A] flex items-center gap-1.5">
+          <Card className="mt-4 p-4 bg-[var(--c-card)] border-[var(--c-border)] shadow-none">
+            <Label className="text-xs uppercase tracking-wide text-[var(--c-muted)] flex items-center gap-1.5">
               <Wallet className="w-3.5 h-3.5" /> Bank account for this upload
             </Label>
             <select
               value={overrideAccountId}
               onChange={(e) => setOverrideAccountId(e.target.value)}
               data-testid="upload-account-picker"
-              className="w-full mt-2 h-9 px-3 bg-white border border-[#EAE3D9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#364C2E]/20"
+              className="w-full mt-2 h-9 px-3 bg-[var(--c-card)] border border-[var(--c-border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--c-primary)_20%,transparent)]"
             >
               <option value="">Auto-detect from file (recommended for PDFs)</option>
               {accounts.map((a) => (
@@ -155,7 +155,7 @@ export default function Upload() {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-[#656C5A] mt-1.5">
+            <p className="text-xs text-[var(--c-muted)] mt-1.5">
               Pick a specific account if auto-detect picks the wrong one or your file has no sort code (e.g. CSV).
             </p>
           </Card>
@@ -163,8 +163,8 @@ export default function Upload() {
 
         <TabsContent value="file" className="mt-5">
           <Card
-            className={`border-2 border-dashed bg-white transition-all ${
-              dragOver ? "border-[#364C2E] bg-[#F4EBE1]/40" : "border-[#EAE3D9]"
+            className={`border-2 border-dashed bg-[var(--c-card)] transition-all ${
+              dragOver ? "border-[var(--c-primary)] bg-[color-mix(in_srgb,var(--c-surface)_40%,transparent)]" : "border-[var(--c-border)]"
             } shadow-none`}
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
@@ -174,18 +174,18 @@ export default function Upload() {
             <div className="p-12 text-center">
               {busy ? (
                 <>
-                  <Loader2 className="w-10 h-10 mx-auto text-[#364C2E] animate-spin" />
-                  <p className="mt-4 text-[#1F2E1B]">Parsing statement...</p>
+                  <Loader2 className="w-10 h-10 mx-auto text-[var(--c-primary)] animate-spin" />
+                  <p className="mt-4 text-[var(--c-ink)]">Parsing statement...</p>
                 </>
               ) : (
                 <>
-                  <div className="w-16 h-16 mx-auto rounded-md bg-[#F4EBE1] flex items-center justify-center">
-                    <UploadCloud className="w-8 h-8 text-[#364C2E]" />
+                  <div className="w-16 h-16 mx-auto rounded-md bg-[var(--c-surface)] flex items-center justify-center">
+                    <UploadCloud className="w-8 h-8 text-[var(--c-primary)]" />
                   </div>
                   <h3 className="text-lg mt-4 font-medium" style={{ fontFamily: "Work Sans" }}>
                     Drop a CSV, Excel, PDF, ODS or OFX here
                   </h3>
-                  <p className="text-sm text-[#656C5A] mt-1">or click to browse</p>
+                  <p className="text-sm text-[var(--c-muted)] mt-1">or click to browse</p>
                   <input
                     ref={fileRef}
                     type="file"
@@ -197,7 +197,7 @@ export default function Upload() {
                   <Button
                     onClick={() => fileRef.current?.click()}
                     data-testid="choose-file-btn"
-                    className="mt-6 bg-[#364C2E] hover:bg-[#22331D] text-white"
+                    className="mt-6 bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)]"
                   >
                     <FileText className="w-4 h-4 mr-2" /> Choose file
                   </Button>
@@ -208,7 +208,7 @@ export default function Upload() {
         </TabsContent>
 
         <TabsContent value="url" className="mt-5">
-          <Card className="p-6 bg-white border-[#EAE3D9] shadow-none">
+          <Card className="p-6 bg-[var(--c-card)] border-[var(--c-border)] shadow-none">
             <Label htmlFor="sheet-url" className="text-sm">Google Sheets share link or public CSV/Excel URL</Label>
             <div className="flex gap-2 mt-2">
               <Input
@@ -217,19 +217,19 @@ export default function Upload() {
                 placeholder="https://docs.google.com/spreadsheets/d/..../edit"
                 value={sheetUrl}
                 onChange={(e) => setSheetUrl(e.target.value)}
-                className="bg-white border-[#EAE3D9] flex-1"
+                className="bg-[var(--c-card)] border-[var(--c-border)] flex-1"
               />
               <Button
                 onClick={importUrl}
                 disabled={busy}
                 data-testid="import-url-btn"
-                className="bg-[#364C2E] hover:bg-[#22331D] text-white whitespace-nowrap"
+                className="bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)] whitespace-nowrap"
               >
                 {busy ? (<><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Fetching…</>) : (<>Import</>)}
               </Button>
             </div>
-            <div className="mt-4 p-3 rounded-md bg-[#F4EBE1]/40 border border-[#EAE3D9] text-xs text-[#656C5A]">
-              <p className="font-medium text-[#1F2E1B] mb-1">For Google Sheets to work:</p>
+            <div className="mt-4 p-3 rounded-md bg-[color-mix(in_srgb,var(--c-surface)_40%,transparent)] border border-[var(--c-border)] text-xs text-[var(--c-muted)]">
+              <p className="font-medium text-[var(--c-ink)] mb-1">For Google Sheets to work:</p>
               <ol className="list-decimal pl-5 space-y-0.5">
                 <li>Open your sheet in Google Sheets</li>
                 <li>Click <strong>Share</strong> → set "General access" to <strong>Anyone with the link</strong> (Viewer)</li>
@@ -242,12 +242,12 @@ export default function Upload() {
       </Tabs>
 
       {result && (
-        <Card className="p-6 bg-white border-[#EAE3D9] shadow-none" data-testid="upload-result">
+        <Card className="p-6 bg-[var(--c-card)] border-[var(--c-border)] shadow-none" data-testid="upload-result">
           <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-6 h-6 text-[#4B6B40]" />
+            <CheckCircle2 className="w-6 h-6 text-[var(--c-success)]" />
             <div>
               <h3 className="font-medium" style={{ fontFamily: "Work Sans" }}>Import complete</h3>
-              <p className="text-sm text-[#656C5A] mt-0.5">
+              <p className="text-sm text-[var(--c-muted)] mt-0.5">
                 {result.inserted} new transactions imported, {result.skipped} duplicates skipped (of {result.total} parsed).
               </p>
             </div>
@@ -257,20 +257,20 @@ export default function Upload() {
               - If detection picked an account, show which one + an option to reassign.
               - If nothing was detected, show a picker so the user can attach one. */}
           {result.bank_account?.auto_detected && result.bank_account_id && (
-            <div className="mt-4 px-4 py-3 rounded-md bg-[#F4EBE1]/60 border border-[#EAE3D9]">
+            <div className="mt-4 px-4 py-3 rounded-md bg-[color-mix(in_srgb,var(--c-surface)_60%,transparent)] border border-[var(--c-border)]">
               <div className="flex flex-wrap items-center gap-3">
-                <Wallet className="w-4 h-4 text-[#364C2E]" />
+                <Wallet className="w-4 h-4 text-[var(--c-primary)]" />
                 <span className="text-sm">
                   {result.bank_account.created ? "Created new account" : "Auto-detected account"}:{" "}
                   <strong>{result.bank_account.account_name}</strong>
-                  {result.bank_account.sort_code && <span className="text-[#656C5A]"> · {result.bank_account.sort_code}</span>}
+                  {result.bank_account.sort_code && <span className="text-[var(--c-muted)]"> · {result.bank_account.sort_code}</span>}
                 </span>
                 <div className="flex items-center gap-2 ml-auto">
                   <select
                     value={reassignTo}
                     onChange={(e) => setReassignTo(e.target.value)}
                     data-testid="upload-reassign-picker"
-                    className="h-8 px-2 bg-white border border-[#EAE3D9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#364C2E]/20"
+                    className="h-8 px-2 bg-[var(--c-card)] border border-[var(--c-border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--c-primary)_20%,transparent)]"
                   >
                     {accounts.map((a) => (
                       <option key={a.id} value={a.id}>{a.name}</option>
@@ -281,7 +281,7 @@ export default function Upload() {
                     onClick={reassignBankAccount}
                     disabled={!reassignTo || reassignTo === result.bank_account_id}
                     data-testid="upload-reassign-btn"
-                    className="border-[#EAE3D9] hover:bg-[#F4EBE1] disabled:opacity-50"
+                    className="border-[var(--c-border)] hover:bg-[var(--c-surface)] disabled:opacity-50"
                   >
                     Reassign
                   </Button>
@@ -290,28 +290,28 @@ export default function Upload() {
             </div>
           )}
           {!result.bank_account_id && result.bank_account?.sort_code === null && (
-            <div className="mt-4 px-4 py-3 rounded-md bg-[#D1A77E]/15 border border-[#D1A77E]/30 flex items-center gap-3">
-              <AlertCircle className="w-4 h-4 text-[#8B5E3C]" />
-              <p className="text-sm text-[#8B5E3C]">
+            <div className="mt-4 px-4 py-3 rounded-md bg-[color-mix(in_srgb,var(--c-accent)_15%,transparent)] border border-[color-mix(in_srgb,var(--c-accent)_30%,transparent)] flex items-center gap-3">
+              <AlertCircle className="w-4 h-4 text-[var(--c-warn)]" />
+              <p className="text-sm text-[var(--c-warn)]">
                 No sort code found in the file — these transactions aren't linked to a bank account yet. Use the picker above on your next upload to assign one.
               </p>
             </div>
           )}
 
           <div className="flex gap-3 mt-4">
-            <Button onClick={() => navigate("/transactions?filter=uncategorized")} className="bg-[#364C2E] hover:bg-[#22331D] text-white" data-testid="goto-uncategorized-btn">
+            <Button onClick={() => navigate("/transactions?filter=uncategorized")} className="bg-[var(--c-primary)] hover:bg-[var(--c-primary-deep)] text-[var(--c-on-primary)]" data-testid="goto-uncategorized-btn">
               Categorize transactions
             </Button>
-            <Button onClick={() => navigate("/")} variant="outline" className="border-[#EAE3D9] hover:bg-[#F4EBE1]" data-testid="goto-dashboard-btn">
+            <Button onClick={() => navigate("/")} variant="outline" className="border-[var(--c-border)] hover:bg-[var(--c-surface)]" data-testid="goto-dashboard-btn">
               View dashboard
             </Button>
           </div>
         </Card>
       )}
 
-      <Card className="p-6 bg-[#F4EBE1]/40 border-[#EAE3D9] shadow-none">
+      <Card className="p-6 bg-[color-mix(in_srgb,var(--c-surface)_40%,transparent)] border-[var(--c-border)] shadow-none">
         <h4 className="font-medium" style={{ fontFamily: "Work Sans" }}>Supported formats</h4>
-        <ul className="text-sm text-[#656C5A] mt-2 space-y-1 list-disc pl-5">
+        <ul className="text-sm text-[var(--c-muted)] mt-2 space-y-1 list-disc pl-5">
           <li><strong>CSV / TSV</strong> — most banks export to this</li>
           <li><strong>Excel</strong> (.xlsx, .xls)</li>
           <li><strong>OpenDocument Spreadsheet</strong> (.ods) — LibreOffice / Apple Numbers export</li>

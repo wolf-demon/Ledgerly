@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 13 — verified the visual/theme drop (4-theme system, 40-color category palette, global CSS-variable migration). Backend regression executed via pytest -q on /app/backend/tests (the full suite): 115 passed, 1 skipped, 0 failed in 115s — no API contracts were broken. Frontend e2e via Playwright against the public REACT_APP_BACKEND_URL covered: (a) theme picker on /settings — all 4 cards (sage/midnight/ocean/aurora) render with name+mode pill+swatch row+description, clicking each updates document.documentElement.data-theme and persists to localStorage('ledgerly.theme'), midnight/aurora also add the .dark class on <html>, body background updates accordingly (sage rgb(253,251,247) → midnight rgb(15,20,25) → ocean rgb(244,248,251) → aurora rgb(19,17,39)); (b) selecting midnight survives a full page reload; (c) all 8 main pages render without JS pageerrors (/, /transactions, /upload, /budgets, /reports, /recurring, /categories, /settings); (d) Categories new-category dialog exposes the new ColorPicker with exactly 40 swatches grouped by hue family, picking color-8b5cf6, naming the category, and creating it round-trips correctly to GET /api/categories returning color='#8B5CF6'; opening edit-cat-<id> reopens the dialog with that swatch marked with ring-2 ring-offset-2 ring-[var(--c-primary)]; cleanup DELETE returns 200. (e) Parent-category select (data-testid='category-parent-select') still present in the dialog, so sub-category flow is intact. (f) Visual sanity on Midnight Dashboard verified by screenshot.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/",
+    "/app/test_reports/pytest/iteration_13.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "themeContext.jsx: applyTheme() falls back to 'sage' on unknown id but the initial useState reads localStorage WITHOUT validating against THEMES, so a malformed value would still be stored as `theme` state and only be silently coerced in applyTheme — minor, would be cleaner to validate at the useState init too so the picker UI stays in sync.",
+    "ColorPicker.jsx: hardcodes 40 hex values inline. Fine for now, but mixed-case hex (#8B5CF6 stored vs #8b5cf6 in testid) is consistently lower-cased in the testid attribute which is correct. Round-trip preserves uppercase from backend — good.",
+    "Settings.jsx theme cards: swatch <span> uses inline backgroundColor + a 1px rgba(0,0,0,0.06) border. On the dark themes the dark-tinted swatch (e.g. #0F1419 in Midnight) is hard to distinguish from the card background — consider tinting the border with the inverse mode instead of always rgba(0,0,0,0.06). Cosmetic only.",
+    "useThemeColors.js: uses MutationObserver on data-theme — good. Consider also exposing the active themeId so consumers can branch on light vs dark when picking grid/grain colours.",
+    "Global: heavy use of color-mix(in srgb, var(--c-X) N%, transparent) — confirmed working in Chromium-based preview. Worth noting that older Electron (<v110) does not support color-mix; users on stale Electron builds would see broken tints. Suggest documenting the minimum Electron version or shipping a PostCSS fallback."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (115/116 passed, 1 skipped, 0 failed)",
+    "frontend": "100% (theme picker + persistence + all 8 pages + category color round-trip)"
+  },
+  "test_credentials": "N/A — app has no auth.",
+  "seed_data_creation": "Created one TEST_ColorCat_<ts> category via the UI in the active project (TEST_UI_Split_1778620505545) to verify color round-trip, then deleted it via DELETE /api/categories/<id> (HTTP 200). Theme was reset to 'sage' at the end so the next agent starts on the default. No other data created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New testids introduced this iteration: theme-grid, theme-sage, theme-midnight, theme-ocean, theme-aurora on /settings; category-color-picker + color-<hex-lowercase-without-#> (40 swatches) inside the Categories new/edit dialog. Theme persistence key: localStorage('ledgerly.theme'). <html> gets data-theme=<id> plus .dark class for midnight & aurora. Dashboard recharts colors are resolved at runtime via useThemeColors() — they re-render on data-theme mutation. All other testids from iteration_11 (bank-filter-*, group-*, add-sub-*, category-parent-select, edit-cat-<id>, new-category-btn) still work. Active project localStorage key remains 'activeProjectId'. The preview backend strips the /api prefix correctly; calling fetch('/api/categories?project_id=<id>') from inside page.evaluate works from same-origin, but external urllib.request calls return 403 (CORS/origin gating on the preview ingress) — use page.evaluate(fetch) for any API checks from Playwright.",
+  "rca of the issue": "No failures observed. Iteration is a clean pass."
+}
