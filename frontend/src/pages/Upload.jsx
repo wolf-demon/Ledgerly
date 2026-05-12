@@ -1,25 +1,36 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProject } from "../lib/projectContext";
+import { useBankAccount } from "../lib/bankAccountContext";
 import api from "../lib/api";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
-import { UploadCloud, FileText, Loader2, CheckCircle2, Link as LinkIcon, ExternalLink } from "lucide-react";
+import { UploadCloud, FileText, Loader2, CheckCircle2, Link as LinkIcon, ExternalLink, Wallet, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const SUPPORTED_EXT = ".csv,.tsv,.pdf,.xlsx,.xls,.ods,.ofx,.qfx";
 
 export default function Upload() {
   const { active } = useProject();
+  const { accounts, reload: reloadAccounts } = useBankAccount();
   const navigate = useNavigate();
   const fileRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [sheetUrl, setSheetUrl] = useState("");
+  // null = "Auto-detect" (let the backend infer from the file). A real ID overrides.
+  const [overrideAccountId, setOverrideAccountId] = useState("");
+  // Post-upload manual reassignment selection.
+  const [reassignTo, setReassignTo] = useState("");
+
+  // Refresh account list whenever the page mounts so the picker stays in sync.
+  useEffect(() => {
+    if (active) reloadAccounts();
+  }, [active, reloadAccounts]);
 
   if (!active) return <div className="text-[#656C5A]">Create or select a project first.</div>;
 
@@ -31,10 +42,13 @@ export default function Upload() {
       const fd = new FormData();
       fd.append("project_id", active.id);
       fd.append("file", file);
+      if (overrideAccountId) fd.append("bank_account_id", overrideAccountId);
       const res = await api.post("/transactions/upload", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setResult(res.data);
+      setReassignTo(res.data.bank_account_id || "");
+      reloadAccounts();
       toast.success(`Imported ${res.data.inserted} transactions (${res.data.skipped} duplicates skipped)`);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Upload failed");
@@ -61,6 +75,32 @@ export default function Upload() {
       toast.error(e?.response?.data?.detail || "Import failed");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const reassignBankAccount = async () => {
+    if (!result?.bank_account_id || reassignTo === result.bank_account_id) return;
+    // Bulk-update every transaction this upload created to point at the new account.
+    // We do this by fetching transactions linked to the auto-detected account and
+    // moving them over. PUT /transactions doesn't support bank_account_id rewrites
+    // out of the box, so we go through the existing list endpoint + per-row update
+    // is wasteful. Instead use the bank-accounts MERGE pattern: re-name the existing
+    // account if we're keeping it, or delete-and-reattach via the back end.
+    try {
+      // The simplest user-visible action: rename the auto-created account to the
+      // selected target's name, then DELETE the target account (which detaches
+      // its txns) and rename the auto-created back into place. Too clever.
+      // Cleanest: ask the user to delete the wrong auto-detected account in the
+      // accounts page. For now, expose the manual reassignment as a server PUT
+      // that swaps bank_account_id on all txns of the auto-detected account.
+      const detected = result.bank_account_id;
+      await api.put(`/bank-accounts/${detected}/reassign`, { target_id: reassignTo });
+      toast.success("Bank account updated for all imported transactions");
+      // Update local state so the UI reflects the change immediately.
+      setResult({ ...result, bank_account_id: reassignTo });
+      reloadAccounts();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not reassign — try the Bank Accounts page");
     }
   };
 
@@ -92,6 +132,34 @@ export default function Upload() {
             <LinkIcon className="w-4 h-4 mr-1.5" /> Google Sheets / URL
           </TabsTrigger>
         </TabsList>
+
+        {/* Pre-upload bank-account picker. By default we auto-detect from the
+            PDF sort code. The picker lets the user force a specific account
+            (useful for CSV/Excel files where there's no sort code to detect,
+            or when a statement uses an unrecognised format). */}
+        {accounts.length > 0 && (
+          <Card className="mt-4 p-4 bg-white border-[#EAE3D9] shadow-none">
+            <Label className="text-xs uppercase tracking-wide text-[#656C5A] flex items-center gap-1.5">
+              <Wallet className="w-3.5 h-3.5" /> Bank account for this upload
+            </Label>
+            <select
+              value={overrideAccountId}
+              onChange={(e) => setOverrideAccountId(e.target.value)}
+              data-testid="upload-account-picker"
+              className="w-full mt-2 h-9 px-3 bg-white border border-[#EAE3D9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#364C2E]/20"
+            >
+              <option value="">Auto-detect from file (recommended for PDFs)</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}{a.sort_code ? ` · ${a.sort_code}` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-[#656C5A] mt-1.5">
+              Pick a specific account if auto-detect picks the wrong one or your file has no sort code (e.g. CSV).
+            </p>
+          </Card>
+        )}
 
         <TabsContent value="file" className="mt-5">
           <Card
@@ -184,6 +252,52 @@ export default function Upload() {
               </p>
             </div>
           </div>
+
+          {/* Bank account confirmation / manual override.
+              - If detection picked an account, show which one + an option to reassign.
+              - If nothing was detected, show a picker so the user can attach one. */}
+          {result.bank_account?.auto_detected && result.bank_account_id && (
+            <div className="mt-4 px-4 py-3 rounded-md bg-[#F4EBE1]/60 border border-[#EAE3D9]">
+              <div className="flex flex-wrap items-center gap-3">
+                <Wallet className="w-4 h-4 text-[#364C2E]" />
+                <span className="text-sm">
+                  {result.bank_account.created ? "Created new account" : "Auto-detected account"}:{" "}
+                  <strong>{result.bank_account.account_name}</strong>
+                  {result.bank_account.sort_code && <span className="text-[#656C5A]"> · {result.bank_account.sort_code}</span>}
+                </span>
+                <div className="flex items-center gap-2 ml-auto">
+                  <select
+                    value={reassignTo}
+                    onChange={(e) => setReassignTo(e.target.value)}
+                    data-testid="upload-reassign-picker"
+                    className="h-8 px-2 bg-white border border-[#EAE3D9] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#364C2E]/20"
+                  >
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                  <Button
+                    size="sm" variant="outline"
+                    onClick={reassignBankAccount}
+                    disabled={!reassignTo || reassignTo === result.bank_account_id}
+                    data-testid="upload-reassign-btn"
+                    className="border-[#EAE3D9] hover:bg-[#F4EBE1] disabled:opacity-50"
+                  >
+                    Reassign
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+          {!result.bank_account_id && result.bank_account?.sort_code === null && (
+            <div className="mt-4 px-4 py-3 rounded-md bg-[#D1A77E]/15 border border-[#D1A77E]/30 flex items-center gap-3">
+              <AlertCircle className="w-4 h-4 text-[#8B5E3C]" />
+              <p className="text-sm text-[#8B5E3C]">
+                No sort code found in the file — these transactions aren't linked to a bank account yet. Use the picker above on your next upload to assign one.
+              </p>
+            </div>
+          )}
+
           <div className="flex gap-3 mt-4">
             <Button onClick={() => navigate("/transactions?filter=uncategorized")} className="bg-[#364C2E] hover:bg-[#22331D] text-white" data-testid="goto-uncategorized-btn">
               Categorize transactions

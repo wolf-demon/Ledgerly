@@ -43,7 +43,11 @@ export default function NewProjectDialog({ open, onOpenChange, onCreated }) {
       const res = await api.post("/projects", { name, description });
       toast.success(`Project "${res.data.name}" created`);
       onOpenChange(false);
-      onCreated?.(res.data);
+      // Defer the parent's reload+setActive so Radix can finish its
+      // onCloseAutoFocus cycle. Otherwise the body pointer-events lock that
+      // Radix sets during the close animation can leak and break the next
+      // dialog open.
+      setTimeout(() => onCreated?.(res.data), 50);
     } catch {
       toast.error("Failed to create project");
     } finally {

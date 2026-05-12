@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Button } from "./ui/button";
 
@@ -47,6 +47,22 @@ export function ConfirmProvider({ children }) {
       resolverRef.current = null;
     }
   };
+
+  // Defensive: Radix Dialog/DropdownMenu sometimes leak `body { pointer-events: none }`
+  // when a dialog is opened on top of another closing portal (typical when
+  // confirm() is triggered from inside a DropdownMenuItem). Strip any leaked
+  // inline style every time our confirm dialog closes so the next interaction
+  // isn't silently blocked.
+  useEffect(() => {
+    if (!state.open) {
+      const t = setTimeout(() => {
+        if (document.body.style.pointerEvents === "none") {
+          document.body.style.pointerEvents = "";
+        }
+      }, 200);
+      return () => clearTimeout(t);
+    }
+  }, [state.open]);
 
   return (
     <ConfirmContext.Provider value={confirm}>

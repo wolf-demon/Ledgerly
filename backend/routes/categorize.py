@@ -112,6 +112,12 @@ async def bulk_suggest(payload: BulkSuggestPayload):
     if not cats and not payload.allow_create:
         raise HTTPException(status_code=400, detail="No categories defined and allow_create is false.")
 
+    # Build a quick "name -> existing category" map for resolution + a list of
+    # top-level parents that the AI can hang new sub-categories under.
+    cat_by_name: Dict[str, Dict[str, Any]] = {c["name"].lower(): c for c in cats}
+    cat_by_id: Dict[str, Dict[str, Any]] = {c["id"]: c for c in cats}
+    top_level_names = sorted({c["name"] for c in cats if not c.get("parent_id")})
+
     q: Dict[str, Any] = {"project_id": payload.project_id}
     if payload.only_uncategorized:
         q["category_id"] = None
@@ -131,6 +137,9 @@ async def bulk_suggest(payload: BulkSuggestPayload):
 
     create_hint = (
         "If none of the existing categories fit, you MAY suggest a brand new category — set is_new to true. "
+        "When suggesting a NEW category, you MAY also suggest a parent_name to place it under (must match "
+        "one of the existing TOP-LEVEL category names exactly). Setting parent_name only makes sense for "
+        "new categories — leave it empty otherwise. "
         if payload.allow_create else
         "You MUST pick one of the existing categories — set is_new to false. "
     )
@@ -139,15 +148,27 @@ async def bulk_suggest(payload: BulkSuggestPayload):
         "Prefer one of the EXISTING categories when reasonable. "
         f"{create_hint}"
         "Respond ONLY with strict JSON of the form "
-        "{\"category_name\": \"<name>\", \"is_new\": <true|false>, \"type\": \"<income|expense>\", \"reason\": \"<short>\"}."
+        "{\"category_name\": \"<name>\", \"is_new\": <true|false>, \"type\": \"<income|expense>\", "
+        "\"parent_name\": \"<optional parent>\", \"reason\": \"<short>\"}."
     )
 
     async def _ask_ai(desc: str, amount: float) -> Optional[Dict[str, Any]]:
-        existing_list = "\n".join([f"- {c['name']} ({c['type']})" for c in cat_by_name.values()]) or "(none yet)"
+        # Annotate the category list with parent names so the AI sees the tree
+        # ("Petrol (under Transport)") and can suggest sub-cats correctly.
+        rendered = []
+        for c in cat_by_name.values():
+            pid = c.get("parent_id")
+            if pid and pid in cat_by_id:
+                rendered.append(f"- {c['name']} ({c['type']}, under {cat_by_id[pid]['name']})")
+            else:
+                rendered.append(f"- {c['name']} ({c['type']})")
+        existing_list = "\n".join(rendered) or "(none yet)"
+        tops_str = ", ".join(top_level_names) or "(none)"
         user_text = (
             f"Transaction: {desc}\n"
             f"Amount: {amount} GBP ({'income' if amount >= 0 else 'expense'})\n\n"
-            f"Existing categories:\n{existing_list}\n\n"
+            f"Existing categories (tree):\n{existing_list}\n\n"
+            f"Top-level parents available to anchor a new sub-category: {tops_str}\n\n"
             "Return JSON only."
         )
         try:
@@ -162,30 +183,47 @@ async def bulk_suggest(payload: BulkSuggestPayload):
             name = (parsed.get("category_name") or "").strip()
             cat_type = (parsed.get("type") or "").strip().lower()
             is_new = bool(parsed.get("is_new"))
+            parent_name = (parsed.get("parent_name") or "").strip()
             if not name:
                 return None
             if cat_type not in ("income", "expense"):
                 cat_type = "income" if amount >= 0 else "expense"
-            return {"name": name, "type": cat_type, "is_new": is_new, "reason": parsed.get("reason", "")}
+            return {"name": name, "type": cat_type, "is_new": is_new, "parent_name": parent_name, "reason": parsed.get("reason", "")}
         except Exception as e:
             errors.append(f"{desc[:40]}: {str(e)[:80]}")
             return None
 
-    async def _resolve_category(name: str, cat_type: str, allow_new: bool) -> Optional[Dict[str, Any]]:
+    async def _resolve_category(name: str, cat_type: str, allow_new: bool, parent_name: str = "") -> Optional[Dict[str, Any]]:
         clean = re.sub(r'\s*\([^)]*\)\s*$', '', name).strip()
         existing = cat_by_name.get(clean.lower()) or cat_by_name.get(name.lower())
         if existing:
             return existing
         if not allow_new:
             return None
+        # Resolve parent (only valid for new categories) — must be a top-level
+        # category of the SAME type, otherwise we silently drop the parent.
+        parent_id: Optional[str] = None
+        if parent_name:
+            p = cat_by_name.get(parent_name.lower())
+            if p and not p.get("parent_id") and p.get("type") == cat_type:
+                parent_id = p["id"]
         color = PALETTE[len(cat_by_name) % len(PALETTE)]
-        cat = Category(project_id=payload.project_id, name=clean, type=cat_type, color=color)
+        cat = Category(
+            project_id=payload.project_id, name=clean, type=cat_type, color=color,
+            parent_id=parent_id,
+        )
         cdoc = cat.model_dump()
         cdoc['created_at'] = cdoc['created_at'].isoformat()
         await db.categories.insert_one(cdoc)
-        created = {"id": cat.id, "name": cat.name, "type": cat.type, "color": cat.color, "project_id": payload.project_id}
+        created = {
+            "id": cat.id, "name": cat.name, "type": cat.type, "color": cat.color,
+            "project_id": payload.project_id, "parent_id": parent_id,
+        }
         cat_by_name[clean.lower()] = created
-        created_categories.append({"id": cat.id, "name": cat.name, "type": cat.type})
+        created_categories.append({
+            "id": cat.id, "name": cat.name, "type": cat.type, "parent_id": parent_id,
+            "parent_name": cat_by_id.get(parent_id, {}).get("name") if parent_id else None,
+        })
         return created
 
     for key, members in groups.items():
@@ -193,7 +231,10 @@ async def bulk_suggest(payload: BulkSuggestPayload):
         suggestion = await _ask_ai(sample["description"], float(sample["amount"]))
         if not suggestion:
             continue
-        cat = await _resolve_category(suggestion["name"], suggestion["type"], payload.allow_create)
+        cat = await _resolve_category(
+            suggestion["name"], suggestion["type"], payload.allow_create,
+            parent_name=suggestion.get("parent_name", ""),
+        )
         if not cat:
             continue
         for t in members:

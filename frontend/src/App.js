@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import "@/App.css";
 import "@/index.css";
 import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
@@ -53,6 +53,26 @@ function Shell() {
 }
 
 function App() {
+  // Safety net for a known Radix bug: when one overlay (DropdownMenu) closes
+  // and another (Dialog/ConfirmDialog) opens within the same React tick, the
+  // body's inline `pointer-events: none` lock can be left dangling — every
+  // subsequent click silently fails. We watch the body's style attribute and
+  // strip the lock whenever no Radix overlay is actually mounted.
+  useEffect(() => {
+    const stripIfStale = () => {
+      if (document.body.style.pointerEvents !== "none") return;
+      const hasOpenOverlay = document.querySelector(
+        '[data-state="open"][data-radix-popper-content-wrapper], [role="dialog"][data-state="open"], [role="menu"][data-state="open"]',
+      );
+      if (!hasOpenOverlay) document.body.style.pointerEvents = "";
+    };
+    const observer = new MutationObserver(stripIfStale);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["style"] });
+    // Also run once on mount in case the page loads in a stuck state (hot reload).
+    stripIfStale();
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="App">
       <Router>

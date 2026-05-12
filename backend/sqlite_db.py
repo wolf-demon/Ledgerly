@@ -383,6 +383,26 @@ class SQLiteDB:
         self._conn = await aiosqlite.connect(self.path)
         await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.execute("PRAGMA foreign_keys=ON")
+        # Health check + WAL recovery — if a previous packaged run crashed
+        # halfway through a write we want to know early. integrity_check is
+        # cheap on a small SQLite file (<10ms for our scale).
+        try:
+            cur = await self._conn.execute("PRAGMA integrity_check")
+            rows = await cur.fetchall()
+            await cur.close()
+            results = [r[0] for r in rows if r and r[0]]
+            if results and results != ["ok"]:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "SQLite integrity_check reported issues at %s: %s",
+                    self.path, results,
+                )
+            # Force a WAL checkpoint so orphan -wal/-shm files left by a
+            # killed Electron process get merged into the main DB on startup.
+            await self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("SQLite startup health check failed: %s", e)
         # Register a REGEXP helper so non-prefix regex still works
         await self._conn.create_function(
             "REGEXP", 2, lambda pat, val: 1 if val and _re.search(pat, val) else 0

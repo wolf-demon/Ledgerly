@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from app_db import db
 from models import BankAccount, BankAccountCreate, BankAccountUpdate
@@ -106,3 +107,36 @@ async def delete_bank_account(account_id: str):
     await db.bank_accounts.delete_one({"id": account_id})
     await db.transactions.update_many({"bank_account_id": account_id}, {"$set": {"bank_account_id": None}})
     return {"ok": True}
+
+
+class ReassignPayload(BaseModel):
+    target_id: str
+
+
+@router.put("/bank-accounts/{account_id}/reassign")
+async def reassign_bank_account(account_id: str, payload: ReassignPayload):
+    """Move every transaction currently linked to `account_id` over to
+    `payload.target_id` and delete the (now-empty) source account.
+
+    Used by the Upload page when the user wants to override the auto-detected
+    bank account: a fresh account was just auto-created from the PDF — the
+    user picks an existing one in the dropdown — we move the rows there and
+    drop the duplicate.
+    """
+    src = await db.bank_accounts.find_one({"id": account_id}, {"_id": 0})
+    target = await db.bank_accounts.find_one({"id": payload.target_id}, {"_id": 0})
+    if not src or not target:
+        raise HTTPException(status_code=404, detail="Source or target account not found")
+    if src["project_id"] != target["project_id"]:
+        raise HTTPException(status_code=400, detail="Source and target must belong to the same project")
+    if src["id"] == target["id"]:
+        return {"ok": True, "moved": 0}
+
+    # Reassign every transaction on the source account to the target account.
+    txs = await db.transactions.find({"bank_account_id": account_id}, {"_id": 0}).to_list(100000)
+    for t in txs:
+        await db.transactions.update_one({"id": t["id"]}, {"$set": {"bank_account_id": payload.target_id}})
+
+    # Drop the now-empty source account so the picker doesn't accumulate junk.
+    await db.bank_accounts.delete_one({"id": account_id})
+    return {"ok": True, "moved": len(txs)}

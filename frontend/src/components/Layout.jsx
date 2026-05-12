@@ -34,20 +34,26 @@ export default function Layout({ children, onNewProject }) {
 
   const handleDelete = async () => {
     if (!active) return;
-    const ok = await confirm({
-      title: `Delete project "${active.name}"?`,
-      body: "This permanently removes all transactions, categories and rules in this project. This cannot be undone.",
-      confirmLabel: "Delete project",
-    });
-    if (!ok) return;
-    try {
-      await api.delete(`/projects/${active.id}`);
-      toast.success("Project deleted");
-      await reload();
-      navigate("/");
-    } catch {
-      toast.error("Failed to delete");
-    }
+    // Defer the confirm() call so the DropdownMenu can finish its
+    // onCloseAutoFocus cycle. Otherwise Radix's body[pointer-events:none] lock
+    // from the closing menu portal leaks into the new ConfirmDialog and its
+    // buttons silently refuse clicks.
+    setTimeout(async () => {
+      const ok = await confirm({
+        title: `Delete project "${active.name}"?`,
+        body: "This permanently removes all transactions, categories and rules in this project. This cannot be undone.",
+        confirmLabel: "Delete project",
+      });
+      if (!ok) return;
+      try {
+        await api.delete(`/projects/${active.id}`);
+        toast.success("Project deleted");
+        await reload();
+        navigate("/");
+      } catch {
+        toast.error("Failed to delete");
+      }
+    }, 80);
   };
 
   return (
