@@ -46,12 +46,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
-            label: macOS
           - os: windows-2022
             label: Windows
-          - os: ubuntu-22.04
-            label: Linux
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -69,36 +65,12 @@ jobs:
         run: npm install -g yarn
 
       # Ubuntu 22.04 ships libfuse3 but AppImage runtime needs libfuse2.
-      - name: Install libfuse2 (Linux AppImage runtime dep)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y libfuse2 || sudo apt-get install -y fuse
-
       # ---- Bundled Python runtime ---------------------------------------
       - name: Download Python runtime (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         working-directory: desktop
         run: ./scripts/download-python.ps1 -Target win
-
-      - name: Download Python runtime (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        working-directory: desktop
-        run: |
-          if [ "$(uname -m)" = "arm64" ]; then
-            PY_TARGET="mac-arm"
-          else
-            PY_TARGET="mac-x64"
-          fi
-          bash ./scripts/download-python.sh "$PY_TARGET"
-
-      - name: Download Python runtime (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        working-directory: desktop
-        run: bash ./scripts/download-python.sh linux
 
       # ---- Frontend build -----------------------------------------------
       - name: Build frontend
@@ -146,27 +118,13 @@ jobs:
 
       # ---- Build (NO publish — uploaded as workflow artifacts below) ----
       - name: Package installer
-        shell: bash
+        shell: pwsh
         working-directory: desktop
         env:
-          # macOS notarization (only used if the secrets are set):
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Windows code-signing (only used if the secrets are set):
           CSC_LINK: ${{ secrets.WINDOWS_CERT_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-          # Skip Mac code-signing entirely when no cert is present (otherwise
-          # electron-builder errors out searching the keychain for an identity).
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && steps.apple_cert.outputs.have_cert == 'true' && 'true' || 'false' }}
         run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            yarn dist:win
-          elif [ "${{ runner.os }}" = "macOS" ]; then
-            yarn dist:mac
-          else
-            yarn dist:linux
-          fi
+          yarn dist:win
 
       # ---- Always upload artifacts so you can grab them from the run ----
       - name: Upload installers
@@ -176,9 +134,6 @@ jobs:
           name: ledgerly-${{ matrix.label }}
           path: |
             desktop/dist/*.exe
-            desktop/dist/*.dmg
-            desktop/dist/*.zip
-            desktop/dist/*.AppImage
             desktop/dist/*.blockmap
             desktop/dist/latest*.yml
           if-no-files-found: warn

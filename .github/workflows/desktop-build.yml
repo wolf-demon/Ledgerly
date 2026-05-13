@@ -12,10 +12,6 @@ jobs:
         include:
           - os: windows-latest
             target: win
-          - os: macos-latest
-            target: mac
-          - os: ubuntu-latest
-            target: linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -24,49 +20,17 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Set up Python 3 for host build tooling
-        if: runner.os == 'Linux'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install libfuse2 (Linux AppImage runtime dep)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y libfuse2 || sudo apt-get install -y fuse
-
       # No setup-python step for the bundled runtime itself — the build script
       # downloads python-build-standalone and bundles it into the installer.
 
       - name: Build desktop binary (Windows)
-        if: matrix.os == 'windows-latest'
         shell: pwsh
         working-directory: desktop
-        run: .\build.ps1 -Targets ${{ matrix.target }}
-
-      - name: Build desktop binary (Unix)
-        if: matrix.os != 'windows-latest'
-        shell: bash
-        working-directory: desktop
-        run: ./build.sh ${{ matrix.target }}
-
-      - name: Commit yarn.lock if generated
-        shell: bash
-        run: |
-          if [ -f "frontend/yarn.lock" ] || [ -f "desktop/yarn.lock" ]; then
-            git config user.name "github-actions"
-            git config user.email "github-actions@github.com"
-            git add -A "*/yarn.lock" || true
-            git commit -m "chore: generate yarn.lock files" || true
-            git push || true
-          fi
+        run: .\build.ps1 -Targets win
 
       - uses: actions/upload-artifact@v4
         with:
           name: ledgerly-${{ matrix.os }}
           path: |
             desktop/dist/*.exe
-            desktop/dist/*.dmg
-            desktop/dist/*.AppImage
           if-no-files-found: ignore
