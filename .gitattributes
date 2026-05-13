@@ -1,0 +1,7 @@
+# Force shell scripts to use LF line endings for Unix runners
+*.sh text eol=lf
+
+desktop/scripts/*.sh text eol=lf
+
+# Ensure workflow files use LF as well
+.github/workflows/* text eol=lf

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# download-python.sh — bash equivalent of download-python.ps1 for macOS / Linux.
+# download-python.sh â€” bash equivalent of download-python.ps1 for macOS / Linux.
 # Downloads python-build-standalone for the chosen target, extracts under
 # desktop/python-runtime, and pip-installs the backend requirements.
+# Uses LF line endings for Unix runners.
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -91,7 +92,7 @@ find "$RUNTIME_DIR" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/
 find "$RUNTIME_DIR" -name "tests" -type d -prune -exec rm -rf {} + 2>/dev/null || true
 find "$RUNTIME_DIR" -name "test" -type d -prune -exec rm -rf {} + 2>/dev/null || true
 find "$RUNTIME_DIR" -type f \( -name "*.pyc" -o -name "*.pyi" -o -name "*.pyd.dist-info" \) -delete 2>/dev/null || true
-# Drop pip/setuptools/wheel — runtime doesn't need to install more packages.
+# Drop pip/setuptools/wheel â€” runtime doesn't need to install more packages.
 rm -rf "$RUNTIME_DIR"/lib/python*/site-packages/{pip,pip-*,setuptools,setuptools-*,wheel,wheel-*,_distutils_hack} 2>/dev/null || true
 # Drop unused heavy SDKs that emergentintegrations pulled in transitively but Ledgerly never imports.
 # (Keep cryptography - pdfminer needs it; keep bcrypt/passlib/jose/jwt - low cost, may be transitively needed)
@@ -99,3 +100,4 @@ rm -rf "$RUNTIME_DIR"/lib/python*/site-packages/{googleapiclient,stripe,boto3,bo
 
 SIZE=$(du -sh "$RUNTIME_DIR" | cut -f1)
 printf "\n\033[32m==> Bundled python ready at %s  (%s)\033[0m\n" "$RUNTIME_DIR" "$SIZE"
+

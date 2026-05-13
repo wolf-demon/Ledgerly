@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# build.sh — bash equivalent of build.ps1 for macOS / Linux users.
+# build.sh â€” bash equivalent of build.ps1 for macOS / Linux users.
+# Uses LF line endings for Unix runners.
 #
 # Usage:
 #   ./build.sh                 # build for current OS only
@@ -20,7 +21,7 @@ need() { command -v "$1" >/dev/null 2>&1 || { echo "ERROR: '$1' not on PATH. $2"
 step "Pre-flight checks"
 need node "Install Node.js 20+ from https://nodejs.org"
 need yarn "Run: npm install -g yarn"
-# Python is bundled via python-build-standalone — no longer a host requirement.
+# Python is bundled via python-build-standalone â€” no longer a host requirement.
 echo "  node   : $(node --version)"
 echo "  yarn   : $(yarn --version)"
 echo "  python : (will be bundled)"
@@ -38,7 +39,7 @@ case "$TARGET" in
   current) TARGETS=("$HOST") ;;
   all)
     if [ "$HOST" = "mac" ]; then TARGETS=("mac" "win" "linux")
-    elif [ "$HOST" = "win" ]; then TARGETS=("win" "linux"); echo "WARNING: Mac build skipped — use macOS or GitHub Actions for signed .dmg" >&2
+    elif [ "$HOST" = "win" ]; then TARGETS=("win" "linux"); echo "WARNING: Mac build skipped â€” use macOS or GitHub Actions for signed .dmg" >&2
     else TARGETS=("linux" "win"); fi ;;
   *) TARGETS=("$TARGET") ;;
 esac
@@ -69,3 +70,4 @@ done
 step "Build complete"
 echo "Artifacts in: $DESKTOP/dist"
 ls -lh "$DESKTOP/dist" 2>/dev/null | grep -E "\.(exe|dmg|AppImage|zip)$" || true
+

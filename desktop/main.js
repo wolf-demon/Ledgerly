@@ -102,7 +102,12 @@ function startBackend() {
   });
   backendProcess.stderr.on("data", (d) => log("[backend!]", d.toString().trim()));
   backendProcess.on("error", (e) => log("[backend error]", e.message));
-  backendProcess.on("exit", (code, signal) => log("backend exited:", code, signal));
+  backendProcess.on("exit", (code, signal) => {
+    log("backend exited:", code, signal);
+    if (!backendReady) {
+      log("backend exited before becoming ready");
+    }
+  });
   return true;
 }
 
@@ -113,7 +118,7 @@ function stopBackend() {
   }
 }
 
-function waitForBackend(retries = 120, intervalMs = 500) {
+function waitForBackend(retries = 240, intervalMs = 500) {
   return new Promise((resolve) => {
     let tries = 0;
     const check = () => {
