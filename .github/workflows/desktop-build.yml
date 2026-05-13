@@ -24,8 +24,20 @@ jobs:
         with:
           node-version: "20"
 
-      # No setup-python step — the build script downloads python-build-standalone
-      # and bundles it into the installer.
+      - name: Set up Python 3 for host build tooling
+        if: runner.os == 'Linux'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install libfuse2 (Linux AppImage runtime dep)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libfuse2 || sudo apt-get install -y fuse
+
+      # No setup-python step for the bundled runtime itself — the build script
+      # downloads python-build-standalone and bundles it into the installer.
 
       - name: Build desktop binary (Windows)
         if: matrix.os == 'windows-latest'

@@ -48,13 +48,10 @@ jobs:
         include:
           - os: macos-14
             label: macOS
-            python_target: mac-arm
           - os: windows-2022
             label: Windows
-            python_target: win
           - os: ubuntu-22.04
             label: Linux
-            python_target: linux
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -83,13 +80,25 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         working-directory: desktop
-        run: ./scripts/download-python.ps1 -Target ${{ matrix.python_target }}
+        run: ./scripts/download-python.ps1 -Target win
 
-      - name: Download Python runtime (Unix)
-        if: runner.os != 'Windows'
+      - name: Download Python runtime (macOS)
+        if: runner.os == 'macOS'
         shell: bash
         working-directory: desktop
-        run: bash ./scripts/download-python.sh ${{ matrix.python_target }}
+        run: |
+          if [ "$(uname -m)" = "arm64" ]; then
+            PY_TARGET="mac-arm"
+          else
+            PY_TARGET="mac-x64"
+          fi
+          bash ./scripts/download-python.sh "$PY_TARGET"
+
+      - name: Download Python runtime (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: desktop
+        run: bash ./scripts/download-python.sh linux
 
       # ---- Frontend build -----------------------------------------------
       - name: Build frontend

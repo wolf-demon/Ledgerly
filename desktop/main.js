@@ -52,6 +52,8 @@ function resolveFrontendIndex() {
   return path.join(process.resourcesPath, "frontend", "index.html");
 }
 
+let backendReady = false;
+
 function startBackend() {
   const backendDir = resolveBackendDir();
   if (!fs.existsSync(path.join(backendDir, "server.py"))) {
@@ -86,10 +88,21 @@ function startBackend() {
     return false;
   }
 
-  backendProcess.stdout.on("data", (d) => log("[backend]", d.toString().trim()));
+  backendReady = false;
+  backendProcess.stdout.on("data", (d) => {
+    const text = d.toString().trim();
+    log("[backend]", text);
+    if (
+      text.includes("Uvicorn running") ||
+      text.includes("Application startup complete") ||
+      text.includes("Started server process")
+    ) {
+      backendReady = true;
+    }
+  });
   backendProcess.stderr.on("data", (d) => log("[backend!]", d.toString().trim()));
   backendProcess.on("error", (e) => log("[backend error]", e.message));
-  backendProcess.on("exit", (code) => log("backend exited:", code));
+  backendProcess.on("exit", (code, signal) => log("backend exited:", code, signal));
   return true;
 }
 
@@ -100,22 +113,38 @@ function stopBackend() {
   }
 }
 
-function waitForBackend(retries = 60) {
+function waitForBackend(retries = 120, intervalMs = 500) {
   return new Promise((resolve) => {
     let tries = 0;
-    const tick = () => {
+    const check = () => {
+      if (backendReady) {
+        log("backend ready via stdout signal");
+        resolve(true);
+        return;
+      }
       tries++;
       const req = http.get(`http://127.0.0.1:${BACKEND_PORT}/api/`, (res) => {
-        if (res.statusCode === 200) { log("backend ready after", tries, "tries"); resolve(true); }
-        else if (tries >= retries) resolve(false);
-        else setTimeout(tick, 500);
+        if (res.statusCode === 200) {
+          log("backend ready after", tries, "tries");
+          resolve(true);
+        } else if (tries >= retries) {
+          resolve(false);
+        }
       });
       req.on("error", () => {
-        if (tries >= retries) resolve(false);
-        else setTimeout(tick, 500);
+        if (tries >= retries) {
+          resolve(false);
+        }
+      });
+      req.on("close", () => {
+        if (tries < retries && !backendReady) {
+          setTimeout(check, intervalMs);
+        } else if (tries >= retries && !backendReady) {
+          resolve(false);
+        }
       });
     };
-    tick();
+    check();
   });
 }
 
