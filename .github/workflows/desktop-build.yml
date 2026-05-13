@@ -51,6 +51,17 @@ jobs:
         working-directory: desktop
         run: ./build.sh ${{ matrix.target }}
 
+      - name: Commit yarn.lock if generated
+        shell: bash
+        run: |
+          if [ -f "frontend/yarn.lock" ] || [ -f "desktop/yarn.lock" ]; then
+            git config user.name "github-actions"
+            git config user.email "github-actions@github.com"
+            git add -A "*/yarn.lock" || true
+            git commit -m "chore: generate yarn.lock files" || true
+            git push || true
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: ledgerly-${{ matrix.os }}

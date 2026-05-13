@@ -56,10 +56,10 @@ for t in "${TARGETS[@]}"; do
 done
 
 step "Building React frontend"
-( cd "$FRONTEND" && yarn install --frozen-lockfile && REACT_APP_BACKEND_URL="$BACKEND_URL" yarn build )
+( cd "$FRONTEND" && yarn install && REACT_APP_BACKEND_URL="$BACKEND_URL" yarn build )
 
 step "Installing Electron + electron-builder"
-( cd "$DESKTOP" && yarn install --frozen-lockfile )
+( cd "$DESKTOP" && yarn install )
 
 for t in "${TARGETS[@]}"; do
   step "Packaging desktop binary for: $t"

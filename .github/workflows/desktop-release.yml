@@ -107,13 +107,13 @@ jobs:
         env:
           REACT_APP_BACKEND_URL: http://127.0.0.1:8001
         run: |
-          yarn install --frozen-lockfile
+          yarn install
           yarn build
 
       - name: Install desktop deps
         shell: bash
         working-directory: desktop
-        run: yarn install --frozen-lockfile
+        run: yarn install
 
       # ---- macOS code-signing setup (only when secret is set) -----------
       # GitHub Actions' `if:` evaluator can't read `secrets.*` directly, so we

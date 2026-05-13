@@ -86,7 +86,7 @@ foreach ($t in $targetList) {
 if (-not $SkipFrontend) {
     Write-Step "Building React frontend (REACT_APP_BACKEND_URL=$BackendUrl)"
     Push-Location $Frontend
-    & yarn install --frozen-lockfile
+    & yarn install
     $env:REACT_APP_BACKEND_URL = $BackendUrl
     & yarn build
     Pop-Location
@@ -95,7 +95,7 @@ if (-not $SkipFrontend) {
 # 5. Install Electron deps ----------------------------------------------
 Write-Step "Installing Electron + electron-builder"
 Push-Location $Desktop
-& yarn install --frozen-lockfile
+& yarn install
 
 # 6. Build per-target ----------------------------------------------------
 foreach ($t in $targetList) {
