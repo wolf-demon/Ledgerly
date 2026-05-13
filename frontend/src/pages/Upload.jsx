@@ -14,7 +14,7 @@ import { toast } from "sonner";
 const SUPPORTED_EXT = ".csv,.tsv,.pdf,.xlsx,.xls,.ods,.ofx,.qfx";
 
 export default function Upload() {
-  const { active } = useProject();
+  const { active, bumpRevision } = useProject();
   const { accounts, reload: reloadAccounts } = useBankAccount();
   const navigate = useNavigate();
   const fileRef = useRef(null);
@@ -49,6 +49,7 @@ export default function Upload() {
       setResult(res.data);
       setReassignTo(res.data.bank_account_id || "");
       reloadAccounts();
+      bumpRevision();
       toast.success(`Imported ${res.data.inserted} transactions (${res.data.skipped} duplicates skipped)`);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Upload failed");
@@ -70,6 +71,7 @@ export default function Upload() {
         url: sheetUrl.trim(),
       });
       setResult(res.data);
+      bumpRevision();
       toast.success(`Imported ${res.data.inserted} transactions from ${res.data.source || "URL"}`);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Import failed");
@@ -99,6 +101,7 @@ export default function Upload() {
       // Update local state so the UI reflects the change immediately.
       setResult({ ...result, bank_account_id: reassignTo });
       reloadAccounts();
+      bumpRevision();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not reassign — try the Bank Accounts page");
     }

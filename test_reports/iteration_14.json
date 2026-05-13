@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 14 — verified the state-management refactor (projectContext revision counter, bankAccountContext fetchEpoch, useFetchGuard, optimistic delete + bumpRevision wiring). Backend: full pytest suite green (115 passed, 1 skipped, 0 failed in 116.81s). Frontend: ran scripted Playwright e2e against the public preview URL covering P0 project-switch in-place refresh, rapid switching, project deletion via dropdown, and transaction deletion. Cloudflare bot-protection started returning 403s on the in-page fetches mid-test, which masked the tail end of the transaction-delete and project-delete flows — the dev React error overlay also pops up over the app when these 403s reach raw axios calls (i.e., calls NOT routed through useFetchGuard).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Project delete via dropdown",
+        "issue": "When the DELETE /projects/<id> call (or the subsequent reload()) throws (e.g., Cloudflare 403 in preview, or any real backend hiccup), the finally{} block's navigate('/') does NOT fire because the await reload() inside finally itself throws and short-circuits the remaining statements. Net effect: user is left on /transactions (or wherever they were) with the *fallback* project active in localStorage but no page-level refresh. The user-visible symptom is a 'Failed to delete' toast PLUS the page they were on showing the wrong project's data until manual refresh — exactly the kind of 'app falls over' state the user originally complained about.",
+        "affected_selectors": ["delete-project-menu", "button:has-text('Delete project')"]
+      },
+      {
+        "flow": "Dev error overlay on stray 403/network errors",
+        "issue": "useFetchGuard.js suppresses console.error to console.warn so React's dev overlay doesn't pop up — but only for calls routed through guard(). Bare axios calls outside the guard (CategorizeDialog onSaved, project-delete reload, etc.) still raise the dev error overlay on transient network errors. In production-build this is hidden, but during preview/QA the red overlay covers the app and blocks further interaction until dismissed."
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ledgerly.py",
+    "/app/test_reports/pytest/iteration_14.xml"
+  ],
+  "action_items": [
+    "In components/Layout.jsx handleDelete: wrap `await reload()` inside finally in its own try/catch (or move navigate('/') + bumpRevision() to run *before* reload()) so a failed/slow reload doesn't strand the user on a stale URL with the wrong project context.",
+    "Consider extending useFetchGuard's warn-not-error suppression to a global axios interceptor (or wrap raw axios calls in onSaved / project-delete paths) so transient 403s don't trigger the dev React error overlay covering the whole app.",
+    "Re-test single-row Transaction delete + bulk delete with explicit per-action pacing (>= 800ms between API hits) so Cloudflare's rate limiter doesn't 403 the fetch chain — this iteration could not confirm those flows end-to-end due to env throttling. P0 manual verification recommended."
+  ],
+  "critical_code_review_comments": [
+    "projectContext.jsx setActiveId callback: setActiveIdState((prev)=>{ if (prev===id) return prev; setRevision(r=>r+1); return id; }) — calling setRevision from inside a useState updater is a React anti-pattern. It schedules a state update of one store during the computation of another, which works in practice but warns in StrictMode. Prefer comparing prev outside the updater: setActiveIdState(id); if (id !== activeIdRef.current) setRevision(r=>r+1).",
+    "projectContext.jsx window focus handler reloads projects AND bumps revision on every focus. On a tab with frequent focus events this can fire 5-10x/min, causing unnecessary /projects + downstream /transactions + /bank-accounts re-fetches. Consider debouncing (e.g. ignore focus events <30s apart) — would also reduce the Cloudflare 403 risk this iteration hit.",
+    "Layout.jsx handleDelete: the optimistic setActiveId(fallback.id) fires BEFORE the DELETE call. If the DELETE then fails (network, 403, server), the previous activeId is gone from local state and the project list isn't reloaded with a rollback. The toast says 'Failed to delete' but the project is no longer active in the UI even though it still exists in the DB. Add a rollback: setActiveId(target.id) in the catch.",
+    "bankAccountContext.jsx — the effect that depends on [active, reload, revision] both invalidates fetchEpoch AND calls reload() (which increments fetchEpoch again). Net result: every project switch increments fetchEpoch by 2, which is harmless but means the comment 'epoch !== fetchEpoch.current' check is doing more work than needed. Cosmetic.",
+    "useFetchGuard.js — the unmount cleanup (epoch.current++) only runs on unmount, but every guard() call also increments epoch. There's no bound on epoch — fine for now (JS numbers handle 2^53), just worth noting if anyone ever swaps it for a smaller int type."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (115 passed / 1 skipped)",
+    "frontend": "~60% verified — P0 project-switch in-place refresh + rapid switching + EMPTY-state clearing all confirmed working. Project-delete and tx-delete auto-refresh partially blocked by preview-env Cloudflare 403s; project-delete shows a navigate('/') gap when reload() throws."
+  },
+  "test_credentials": "N/A — app has no auth.",
+  "seed_data_creation": "Created TEST_R14_RICH_<ts> (with 3 CSV-uploaded transactions) and TEST_R14_EMPTY_<ts> projects. Both deleted in teardown via DELETE /api/projects/<id>. Previous TEST_R14_* projects also purged at the start of the run for idempotency.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Preview env's Cloudflare layer rate-limits rapid sequential fetches with HTTP 403. Pace API-driven setup at >=300ms between calls and pace UI-driven project switches at >=500ms to avoid masking real failures. The dev error overlay (`#webpack-dev-server-client-overlay`) is dismissable but will visually cover the app during a screenshot — query for `body > [class*=overlay]` and remove it before screenshots if needed. testids in use this iteration: project-switcher, project-option-<id>, delete-project-menu, new-project-menu, nav-dashboard/transactions/categories/budgets/yearly-report/recurring/upload-statement/settings, delete-tx-btn-<id>. Confirm dialog buttons are plain text-labels: 'Delete project', 'Delete', 'Confirm', 'Cancel'. The handleDelete navigate('/') gap is real and reproducible by any error in the DELETE or subsequent reload(); fix is small (try/catch around reload OR move navigate before reload).",
+  "rca of the issue": "The user-reported 'app falls over' / 'need to fully close and reopen' was caused by stale closure of activeId in fetch effects (each page captured the active project at mount and never refetched). The iteration-14 refactor addresses this via (a) `revision` counter from useProject that pages include in their useEffect deps, (b) useFetchGuard's epoch ref to drop late responses from a previous project, (c) bankAccountContext's immediate clear-on-switch + fetchEpoch guard. All three mechanisms verified working: in-place refresh on Dashboard ✓, on /transactions ✓, no stale RICH after rapid RICH↔EMPTY toggling ✓. The residual fragility is the project-delete navigate gap above — small fix needed."
+}

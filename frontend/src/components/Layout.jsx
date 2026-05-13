@@ -28,30 +28,50 @@ const navItems = [
 ];
 
 export default function Layout({ children, onNewProject }) {
-  const { projects, active, setActiveId, reload } = useProject();
+  const { projects, active, setActiveId, reload, bumpRevision } = useProject();
   const navigate = useNavigate();
   const confirm = useConfirm();
 
+  const handleSelectProject = (id) => {
+    if (id === active?.id) return;
+    setActiveId(id);
+    // Belt-and-braces: also bump the global revision so every page re-fetches
+    // even if its `active` reference happens to be cached. We intentionally
+    // do NOT navigate("/") here — users expect the page they're on (e.g.
+    // Transactions, Reports) to refresh for the new project, not get yanked.
+    bumpRevision();
+  };
+
   const handleDelete = async () => {
     if (!active) return;
+    const target = active; // capture in case context updates mid-flight
     // Defer the confirm() call so the DropdownMenu can finish its
     // onCloseAutoFocus cycle. Otherwise Radix's body[pointer-events:none] lock
     // from the closing menu portal leaks into the new ConfirmDialog and its
     // buttons silently refuse clicks.
     setTimeout(async () => {
       const ok = await confirm({
-        title: `Delete project "${active.name}"?`,
+        title: `Delete project "${target.name}"?`,
         body: "This permanently removes all transactions, categories and rules in this project. This cannot be undone.",
         confirmLabel: "Delete project",
+        destructive: true,
       });
       if (!ok) return;
+      // Optimistic: switch off the active project immediately so dependent
+      // contexts (bank-accounts, transactions, dashboard) start clearing
+      // their state without waiting for the API round-trip.
+      const fallback = projects.find((p) => p.id !== target.id);
+      if (fallback) setActiveId(fallback.id);
+      else setActiveId(null);
       try {
-        await api.delete(`/projects/${active.id}`);
+        await api.delete(`/projects/${target.id}`);
         toast.success("Project deleted");
-        await reload();
-        navigate("/");
       } catch {
         toast.error("Failed to delete");
+      } finally {
+        await reload();
+        bumpRevision();
+        navigate("/");
       }
     }, 80);
   };
@@ -122,7 +142,7 @@ export default function Layout({ children, onNewProject }) {
                   <DropdownMenuItem
                     key={p.id}
                     data-testid={`project-option-${p.id}`}
-                    onClick={() => setActiveId(p.id)}
+                    onClick={() => handleSelectProject(p.id)}
                   >
                     <span className={p.id === active?.id ? "font-semibold" : ""}>{p.name}</span>
                   </DropdownMenuItem>

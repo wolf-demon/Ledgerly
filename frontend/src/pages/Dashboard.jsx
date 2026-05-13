@@ -10,11 +10,13 @@ import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Upload, Tags, AlertCi
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
 import BudgetSummary from "../components/BudgetSummary";
 import { useThemeColors } from "../lib/useThemeColors";
+import { useFetchGuard } from "../lib/useFetchGuard";
 
 export default function Dashboard({ onNewProject }) {
-  const { active, projects, loading: projLoading } = useProject();
+  const { active, projects, loading: projLoading, revision } = useProject();
   const { selectedId: bankAccountId } = useBankAccount();
   const tc = useThemeColors();
+  const guard = useFetchGuard();
   const [year, setYear] = useState(new Date().getFullYear());
   const [data, setData] = useState(null);
   const [recent, setRecent] = useState([]);
@@ -22,30 +24,40 @@ export default function Dashboard({ onNewProject }) {
   const [years, setYears] = useState([new Date().getFullYear()]);
 
   useEffect(() => {
-    if (!active) return;
-    (async () => {
+    if (!active) {
+      // Clear immediately on project switch / delete so the previous project's
+      // numbers don't linger.
+      setData(null);
+      setRecent([]);
+      setUncategorizedCount(0);
+      return;
+    }
+    guard(async ({ isStale }) => {
       const yrs = await api.get("/analytics/years", { params: { project_id: active.id } });
+      if (isStale()) return;
       const list = yrs.data.years.length ? yrs.data.years : [new Date().getFullYear()];
       setYears(list);
       if (!list.includes(year)) setYear(list[0]);
-    })();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [active, revision]);
 
   useEffect(() => {
     if (!active) return;
-    (async () => {
+    guard(async ({ isStale }) => {
       const extra = bankAccountId ? { bank_account_id: bankAccountId } : {};
       const [a, t] = await Promise.all([
         api.get("/analytics/yearly", { params: { project_id: active.id, year, ...extra } }),
         api.get("/transactions", { params: { project_id: active.id, limit: 8, ...extra } }),
       ]);
+      if (isStale()) return;
       setData(a.data);
       setRecent(t.data);
       const all = await api.get("/transactions", { params: { project_id: active.id, uncategorized: true, limit: 5000, ...extra } });
+      if (isStale()) return;
       setUncategorizedCount(all.data.length);
-    })();
-  }, [active, year, bankAccountId]);
+    });
+  }, [active, year, bankAccountId, revision, guard]);
 
   if (projLoading) {
     return <div className="p-8 text-[var(--c-muted)]">Loading...</div>;

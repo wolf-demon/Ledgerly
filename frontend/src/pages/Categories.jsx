@@ -10,26 +10,31 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, Trash2, Edit3 } from "lucide-react";
 import { toast } from "sonner";
 import ColorPicker, { CATEGORY_COLORS } from "../components/ColorPicker";
+import { useFetchGuard } from "../lib/useFetchGuard";
 
 const DEFAULT_COLOR = CATEGORY_COLORS[0];
 
 export default function Categories() {
-  const { active } = useProject();
+  const { active, revision, bumpRevision } = useProject();
   const confirm = useConfirm();
+  const guard = useFetchGuard();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: "", type: "expense", color: DEFAULT_COLOR, parent_id: "" });
 
   const load = useCallback(async () => {
-    if (!active) return;
-    const res = await api.get("/categories", { params: { project_id: active.id } });
-    setItems(res.data);
-  }, [active]);
+    if (!active) { setItems([]); return; }
+    guard(async ({ isStale }) => {
+      const res = await api.get("/categories", { params: { project_id: active.id } });
+      if (isStale()) return;
+      setItems(res.data);
+    });
+  }, [active, guard]);
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, revision]);
 
   if (!active) return <div className="text-[var(--c-muted)]">Create or select a project first.</div>;
 
@@ -66,6 +71,7 @@ export default function Categories() {
         toast.success("Created");
       }
       setOpen(false);
+      bumpRevision();
       load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to save");
@@ -79,10 +85,25 @@ export default function Categories() {
       body: childCount > 0
         ? `${childCount} sub-categor${childCount === 1 ? "y" : "ies"} will be moved to the top level. Transactions assigned to this category will become uncategorized.`
         : "Transactions assigned to this category will become uncategorized. This cannot be undone.",
+      destructive: true,
     });
     if (!ok) return;
-    await api.delete(`/categories/${c.id}`);
-    toast.success("Deleted");
+    const snapshot = items;
+    // Optimistic: remove the category locally and detach any children (matches
+    // backend behaviour) so the row disappears even before the round-trip.
+    setItems((prev) =>
+      prev
+        .filter((x) => x.id !== c.id)
+        .map((x) => (x.parent_id === c.id ? { ...x, parent_id: null } : x)),
+    );
+    try {
+      await api.delete(`/categories/${c.id}`);
+      toast.success("Deleted");
+    } catch (e) {
+      setItems(snapshot);
+      toast.error(e?.response?.data?.detail || "Could not delete");
+    }
+    bumpRevision();
     load();
   };
 

@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import api, { formatGBP } from "../lib/api";
 import { Card } from "../components/ui/card";
 import { Wallet, ArrowRight } from "lucide-react";
+import { useProject } from "../lib/projectContext";
+import { useFetchGuard } from "../lib/useFetchGuard";
 
 const STATUS = {
   ok: "bg-[var(--c-success)]",
@@ -11,23 +13,26 @@ const STATUS = {
 };
 
 export default function BudgetSummary({ projectId, year, month }) {
+  const { revision } = useProject();
+  const guard = useFetchGuard();
   const [items, setItems] = useState(null);
 
   useEffect(() => {
-    if (!projectId) return;
-    let cancelled = false;
-    (async () => {
+    if (!projectId) { setItems([]); return; }
+    setItems(null); // show skeleton-equivalent until fresh data lands
+    guard(async ({ isStale }) => {
       try {
         const r = await api.get("/budgets/progress", {
           params: { project_id: projectId, year, month },
         });
-        if (!cancelled) setItems(r.data.items || []);
+        if (isStale()) return;
+        setItems(r.data.items || []);
       } catch {
-        if (!cancelled) setItems([]);
+        if (isStale()) return;
+        setItems([]);
       }
-    })();
-    return () => { cancelled = true; };
-  }, [projectId, year, month]);
+    });
+  }, [projectId, year, month, revision, guard]);
 
   if (items === null) return null;
 

@@ -8,6 +8,7 @@ import { Input } from "../components/ui/input";
 import { Switch } from "../components/ui/switch";
 import { Wallet, Save, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { useFetchGuard } from "../lib/useFetchGuard";
 
 const STATUS_STYLES = {
   ok: { bar: "bg-[var(--c-success)]", text: "text-[var(--c-success)]", chip: "bg-[color-mix(in_srgb,var(--c-success)_10%,transparent)] text-[var(--c-success)]" },
@@ -157,7 +158,8 @@ function BudgetRow({ category, budget, progress, onChange }) {
 }
 
 export default function Budgets() {
-  const { active } = useProject();
+  const { active, revision } = useProject();
+  const guard = useFetchGuard();
   const [categories, setCategories] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [progress, setProgress] = useState({ items: [] });
@@ -165,27 +167,35 @@ export default function Budgets() {
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [loading, setLoading] = useState(false);
 
-  const reload = async () => {
-    if (!active) return;
-    setLoading(true);
-    try {
-      const [c, b, p] = await Promise.all([
-        api.get("/categories", { params: { project_id: active.id } }),
-        api.get("/budgets", { params: { project_id: active.id } }),
-        api.get("/budgets/progress", { params: { project_id: active.id, year, month } }),
-      ]);
-      setCategories(c.data);
-      setBudgets(b.data);
-      setProgress(p.data);
-    } finally {
-      setLoading(false);
+  const reload = () => {
+    if (!active) {
+      setCategories([]);
+      setBudgets([]);
+      setProgress({ items: [] });
+      return;
     }
+    setLoading(true);
+    guard(async ({ isStale }) => {
+      try {
+        const [c, b, p] = await Promise.all([
+          api.get("/categories", { params: { project_id: active.id } }),
+          api.get("/budgets", { params: { project_id: active.id } }),
+          api.get("/budgets/progress", { params: { project_id: active.id, year, month } }),
+        ]);
+        if (isStale()) return;
+        setCategories(c.data);
+        setBudgets(b.data);
+        setProgress(p.data);
+      } finally {
+        if (!isStale()) setLoading(false);
+      }
+    });
   };
 
   useEffect(() => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, year, month]);
+  }, [active, year, month, revision]);
 
   const budgetByCategory = useMemo(() => {
     const map = {};

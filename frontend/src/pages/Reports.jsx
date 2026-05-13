@@ -4,10 +4,12 @@ import { useBankAccount } from "../lib/bankAccountContext";
 import api, { formatGBP, MONTHS } from "../lib/api";
 import { Card } from "../components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
+import { useFetchGuard } from "../lib/useFetchGuard";
 
 export default function Reports() {
-  const { active } = useProject();
+  const { active, revision } = useProject();
   const { selectedId: bankAccountId } = useBankAccount();
+  const guard = useFetchGuard();
   const [years, setYears] = useState([new Date().getFullYear()]);
   const [year, setYear] = useState(new Date().getFullYear());
   const [data, setData] = useState(null);
@@ -15,20 +17,24 @@ export default function Reports() {
   const [categoryDetail, setCategoryDetail] = useState(null);
 
   const load = useCallback(async () => {
-    if (!active) return;
-    const yrs = await api.get("/analytics/years", { params: { project_id: active.id } });
-    setYears(yrs.data.years);
-    const useYear = yrs.data.years.includes(year) ? year : yrs.data.years[0];
-    if (useYear !== year) setYear(useYear);
-    const params = { project_id: active.id, year: useYear };
-    if (bankAccountId) params.bank_account_id = bankAccountId;
-    const res = await api.get("/analytics/yearly", { params });
-    setData(res.data);
-  }, [active, year, bankAccountId]);
+    if (!active) { setData(null); return; }
+    guard(async ({ isStale }) => {
+      const yrs = await api.get("/analytics/years", { params: { project_id: active.id } });
+      if (isStale()) return;
+      setYears(yrs.data.years);
+      const useYear = yrs.data.years.includes(year) ? year : yrs.data.years[0];
+      if (useYear !== year) setYear(useYear);
+      const params = { project_id: active.id, year: useYear };
+      if (bankAccountId) params.bank_account_id = bankAccountId;
+      const res = await api.get("/analytics/yearly", { params });
+      if (isStale()) return;
+      setData(res.data);
+    });
+  }, [active, year, bankAccountId, guard]);
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, revision]);
 
   const loadDetail = useCallback(async (catId) => {
     if (!active || !catId) return;

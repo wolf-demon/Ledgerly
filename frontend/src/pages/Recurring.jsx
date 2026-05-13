@@ -4,29 +4,34 @@ import api, { formatGBP } from "../lib/api";
 import { Card } from "../components/ui/card";
 import { motion } from "framer-motion";
 import { Repeat, TrendingDown, TrendingUp, Calendar, Sparkles } from "lucide-react";
+import { useFetchGuard } from "../lib/useFetchGuard";
 
 export default function Recurring() {
-  const { active } = useProject();
+  const { active, revision } = useProject();
+  const guard = useFetchGuard();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [lookback, setLookback] = useState(6);
 
   const load = useCallback(async () => {
-    if (!active) return;
+    if (!active) { setData(null); return; }
     setLoading(true);
-    try {
-      const res = await api.get("/analytics/recurring", {
-        params: { project_id: active.id, lookback_months: lookback },
-      });
-      setData(res.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [active, lookback]);
+    guard(async ({ isStale }) => {
+      try {
+        const res = await api.get("/analytics/recurring", {
+          params: { project_id: active.id, lookback_months: lookback },
+        });
+        if (isStale()) return;
+        setData(res.data);
+      } finally {
+        if (!isStale()) setLoading(false);
+      }
+    });
+  }, [active, lookback, guard]);
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, revision]);
 
   if (!active) return <div className="text-[var(--c-muted)]">Create or select a project first.</div>;
 

@@ -16,6 +16,7 @@ import CategorizeDialog from "../components/CategorizeDialog";
 import SplitDialog from "../components/SplitDialog";
 import SplitReviewDialog from "../components/SplitReviewDialog";
 import { useConfirm } from "../components/ConfirmDialog";
+import { useFetchGuard } from "../lib/useFetchGuard";
 import { toast } from "sonner";
 
 // Convert an ISO date "YYYY-MM-DD" into a JS Date with no timezone surprise.
@@ -56,9 +57,10 @@ function groupLabel(key, mode) {
 }
 
 export default function Transactions() {
-  const { active } = useProject();
+  const { active, revision, bumpRevision } = useProject();
   const { accounts, selectedId: bankAccountId } = useBankAccount();
   const confirm = useConfirm();
+  const guard = useFetchGuard();
   const [params] = useSearchParams();
   const initialFilter = params.get("filter") || "all";
 
@@ -83,38 +85,49 @@ export default function Transactions() {
   const accountMap = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts]);
 
   const load = useCallback(async () => {
-    if (!active) return;
-    setLoading(true);
-    try {
-      const params = { project_id: active.id, limit: 5000, include_split_parents: showSplitParents };
-      if (filter === "uncategorized") params.uncategorized = true;
-      if (bankAccountId) params.bank_account_id = bankAccountId;
-      const [t, c] = await Promise.all([
-        api.get("/transactions", { params }),
-        api.get("/categories", { params: { project_id: active.id } }),
-      ]);
-      setTransactions(t.data);
-      setCategories(c.data);
-      setSelected(new Set());
-
-      // Build a quick "split parent id -> [children]" map for indenting.
-      const map = {};
-      for (const tx of t.data) {
-        const pid = tx.parent_transaction_id;
-        if (pid) {
-          if (!map[pid]) map[pid] = [];
-          map[pid].push(tx);
-        }
-      }
-      setSplitChildrenByParent(map);
-    } finally {
-      setLoading(false);
+    if (!active) {
+      // Clear stale data immediately when there is no active project so we
+      // don't render the previous project's transactions during the switch.
+      setTransactions([]);
+      setCategories([]);
+      setSplitChildrenByParent({});
+      return;
     }
-  }, [active, filter, bankAccountId, showSplitParents]);
+    setLoading(true);
+    guard(async ({ isStale }) => {
+      try {
+        const params = { project_id: active.id, limit: 5000, include_split_parents: showSplitParents };
+        if (filter === "uncategorized") params.uncategorized = true;
+        if (bankAccountId) params.bank_account_id = bankAccountId;
+        const [t, c] = await Promise.all([
+          api.get("/transactions", { params }),
+          api.get("/categories", { params: { project_id: active.id } }),
+        ]);
+        if (isStale()) return;
+        setTransactions(t.data);
+        setCategories(c.data);
+        setSelected(new Set());
+
+        // Build a quick "split parent id -> [children]" map for indenting.
+        const map = {};
+        for (const tx of t.data) {
+          const pid = tx.parent_transaction_id;
+          if (pid) {
+            if (!map[pid]) map[pid] = [];
+            map[pid].push(tx);
+          }
+        }
+        setSplitChildrenByParent(map);
+      } finally {
+        if (!isStale()) setLoading(false);
+      }
+    });
+  }, [active, filter, bankAccountId, showSplitParents, guard]);
 
   useEffect(() => {
     load();
-  }, [load]);
+    // `revision` participates so a global "data has changed" bump forces reload.
+  }, [load, revision]);
 
   const catMap = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c])), [categories]);
   const filtered = useMemo(
@@ -164,8 +177,25 @@ export default function Transactions() {
 
   const remove = async (id) => {
     if (!(await confirm({ title: "Delete this transaction?", body: "This cannot be undone." }))) return;
-    await api.delete(`/transactions/${id}`);
-    toast.success("Deleted");
+    // Optimistic: drop from local state immediately so the row disappears even
+    // before the server round-trip completes.
+    const snapshot = transactions;
+    setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    try {
+      await api.delete(`/transactions/${id}`);
+      toast.success("Deleted");
+    } catch (e) {
+      // Roll back on failure.
+      setTransactions(snapshot);
+      toast.error(e?.response?.data?.detail || "Could not delete");
+    }
+    // Re-sync with the server so totals, split rollups, etc. are correct.
+    bumpRevision();
     load();
   };
 
@@ -183,6 +213,7 @@ export default function Transactions() {
     try {
       await api.delete(`/transactions/${t.id}/split`);
       toast.success("Split removed");
+      bumpRevision();
       load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not un-split");
@@ -207,6 +238,7 @@ export default function Transactions() {
       toast.success(
         `Categorized ${res.data.updated} transactions${extra ? ` and ${extra} similar` : ""}`
       );
+      bumpRevision();
       load();
     } catch {
       toast.error("Bulk categorize failed");
@@ -218,9 +250,20 @@ export default function Transactions() {
     if (!(await confirm({
       title: `Delete ${selected.size} selected transactions?`,
       body: "This cannot be undone.",
+      destructive: true,
     }))) return;
-    await Promise.all(Array.from(selected).map((id) => api.delete(`/transactions/${id}`)));
-    toast.success(`Deleted ${selected.size} transactions`);
+    const ids = Array.from(selected);
+    const snapshot = transactions;
+    setTransactions((prev) => prev.filter((t) => !selected.has(t.id)));
+    setSelected(new Set());
+    try {
+      await Promise.all(ids.map((id) => api.delete(`/transactions/${id}`)));
+      toast.success(`Deleted ${ids.length} transactions`);
+    } catch {
+      setTransactions(snapshot);
+      toast.error("Bulk delete failed");
+    }
+    bumpRevision();
     load();
   };
 
@@ -237,6 +280,7 @@ export default function Transactions() {
       } else {
         toast.success(`All ${res.data.checked} transactions already correctly classified`);
       }
+      bumpRevision();
       load();
     } catch {
       toast.error("Reclassify failed");
@@ -269,6 +313,7 @@ export default function Transactions() {
       if (created > 0) msg += ` and created ${created} new categor${created === 1 ? "y" : "ies"}`;
       if (errs > 0) msg += ` (${errs} errors)`;
       toast.success(msg);
+      bumpRevision();
       load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Auto-categorize failed");
@@ -602,17 +647,20 @@ export default function Transactions() {
 
       <CategorizeDialog
         open={open} onOpenChange={setOpen} transaction={editing}
-        categories={categories} projectId={active.id} onSaved={load}
+        categories={categories} projectId={active.id}
+        onSaved={() => { bumpRevision(); load(); }}
       />
 
       <SplitDialog
         open={splitOpen} onOpenChange={setSplitOpen} transaction={splitTarget}
-        categories={categories} onSaved={load}
+        categories={categories}
+        onSaved={() => { bumpRevision(); load(); }}
       />
 
       <SplitReviewDialog
         open={aiSplitOpen} onOpenChange={setAiSplitOpen}
-        projectId={active.id} categories={categories} onSaved={load}
+        projectId={active.id} categories={categories}
+        onSaved={() => { bumpRevision(); load(); }}
       />
 
       <div className="flex items-center justify-between flex-wrap gap-2">
