@@ -28,8 +28,9 @@ export default function CategorizeDialog({ open, onOpenChange, transaction, cate
       if (res.data?.suggested_category_id && !selected) {
         setSelected(res.data.suggested_category_id);
       }
-    } catch {
-      // silent
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[ai-suggest] failed:", err?.message || err);
     } finally {
       setLoadingSuggest(false);
     }
@@ -58,7 +59,9 @@ export default function CategorizeDialog({ open, onOpenChange, transaction, cate
       toast.success(extra > 0 ? `Saved & applied to ${extra} similar transactions` : "Saved");
       onOpenChange(false);
       onSaved?.();
-    } catch {
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[categorize] save failed:", err?.message || err);
       toast.error("Failed to save");
     } finally {
       setSaving(false);

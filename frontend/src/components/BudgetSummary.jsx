@@ -33,7 +33,6 @@ export default function BudgetSummary({ projectId, year, month }) {
       }
     });
   }, [projectId, year, month, revision, guard]);
-
   if (items === null) return null;
 
   if (items.length === 0) {

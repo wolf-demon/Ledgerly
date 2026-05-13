@@ -146,7 +146,7 @@ export default function SplitReviewDialog({ open, onOpenChange, projectId, categ
                 <p className="text-xs uppercase tracking-wide text-[var(--c-muted)]">Suggested split</p>
                 {current.splits.map((s, i) => (
                   <div
-                    key={i}
+                    key={`${s.category_id || s.category_name || "split"}-${i}`}
                     className="flex items-center justify-between px-3 py-2 rounded-md border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)]"
                     data-testid={`review-split-line-${i}`}
                   >

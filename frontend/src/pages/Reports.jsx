@@ -90,7 +90,7 @@ export default function Reports() {
                 </div>
               </td>
               {c.monthly.map((v, i) => (
-                <td key={i} className="text-center px-1 py-2">
+                <td key={`${c.id}-${MONTHS[i]}`} className="text-center px-1 py-2">
                   <div
                     className="relative rounded heatmap-cell"
                     style={{
@@ -192,7 +192,7 @@ export default function Reports() {
           </div>
           <div className="grid grid-cols-12 gap-2 mb-6">
             {categoryDetail.monthly.map((v, i) => (
-              <div key={i} className="text-center">
+              <div key={MONTHS[i]} className="text-center">
                 <div className="text-xs text-[var(--c-muted)] mb-1">{MONTHS[i]}</div>
                 <div className="rounded-md py-2 px-1 text-xs font-medium" style={{
                   backgroundColor: v < 0 ? "color-mix(in srgb, var(--c-danger) 10%, transparent)" : v > 0 ? "color-mix(in srgb, var(--c-success) 10%, transparent)" : "var(--c-surface)",

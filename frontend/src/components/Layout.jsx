@@ -76,8 +76,10 @@ export default function Layout({ children, onNewProject }) {
       bumpRevision();
       try {
         await reload();
-      } catch {
-        /* ignore — projects list will catch up on the next focus / nav. */
+      } catch (err) {
+        // Non-fatal: the projects list will catch up on the next user action.
+        // eslint-disable-next-line no-console
+        console.warn("[layout] post-delete reload failed:", err?.message || err);
       }
     }, 80);
   };

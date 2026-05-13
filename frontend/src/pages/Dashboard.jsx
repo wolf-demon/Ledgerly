@@ -252,7 +252,7 @@ export default function Dashboard({ onNewProject }) {
                     paddingAngle={2}
                   >
                     {expenseCategories.map((entry, i) => (
-                      <Cell key={i} fill={entry.color || COLORS[i % COLORS.length]} />
+                      <Cell key={entry.name || `slice-${i}`} fill={entry.color || COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(v) => formatGBP(v)} contentStyle={{ background: tc["c-card"], border: `1px solid ${tc["c-border"]}`, borderRadius: 6, color: tc["c-ink"] }} />

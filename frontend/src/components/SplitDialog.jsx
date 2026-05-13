@@ -19,6 +19,11 @@ import { toast } from "sonner";
  */
 export default function SplitDialog({ open, onOpenChange, transaction, categories, onSaved, initialSplits }) {
   const [lines, setLines] = useState([]);
+  // Generates a stable per-line key so React can correctly identify lines
+  // when one is added or removed mid-edit (otherwise removing the 2nd of 3
+  // lines makes the 3rd line inherit the 2nd's input focus/state).
+  const lineIdRef = React.useRef(0);
+  const newLineId = () => `ln-${++lineIdRef.current}`;
 
   const expenseCats = useMemo(() => categories.filter((c) => c.type === "expense"), [categories]);
   const incomeCats = useMemo(() => categories.filter((c) => c.type === "income"), [categories]);
@@ -32,6 +37,7 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
       // Normalise signs to match the parent.
       setLines(
         initialSplits.map((s) => ({
+          _key: newLineId(),
           amount: Math.abs(Number(s.amount)) * sign,
           category_id: s.category_id || "",
           description: s.description || "",
@@ -42,8 +48,8 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
       const half = Number((transaction.amount / 2).toFixed(2));
       const remainder = Number((transaction.amount - half).toFixed(2));
       setLines([
-        { amount: half, category_id: "", description: "" },
-        { amount: remainder, category_id: "", description: "" },
+        { _key: newLineId(), amount: half, category_id: "", description: "" },
+        { _key: newLineId(), amount: remainder, category_id: "", description: "" },
       ]);
     }
   }, [open, transaction, initialSplits, sign]);
@@ -64,7 +70,7 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
   const addLine = () => {
     // Insert a new line that takes the current remaining balance, so the user
     // hits "balanced" immediately on a single click.
-    setLines([...lines, { amount: remaining || 0, category_id: "", description: "" }]);
+    setLines([...lines, { _key: newLineId(), amount: remaining || 0, category_id: "", description: "" }]);
   };
 
   const removeLine = (idx) => {
@@ -110,7 +116,7 @@ export default function SplitDialog({ open, onOpenChange, transaction, categorie
         <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
           {lines.map((l, idx) => (
             <div
-              key={idx}
+              key={l._key || idx}
               className="grid grid-cols-12 gap-2 items-end px-2 py-2 rounded-md border border-[color-mix(in_srgb,var(--c-border)_60%,transparent)] hover:border-[color-mix(in_srgb,var(--c-accent)_60%,transparent)] transition-colors"
               data-testid={`split-line-${idx}`}
             >

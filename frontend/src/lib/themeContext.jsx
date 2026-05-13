@@ -32,6 +32,11 @@ export const THEMES = [
 ];
 
 const THEME_STORAGE_KEY = "ledgerly.theme";
+// Note: we store the user's theme choice in localStorage. This is NOT
+// sensitive data (just a colour palette name) so encryption/cookies are
+// overkill. Same applies to `activeProjectId` in projectContext — it's an
+// identifier the user already sees in the URL/UI. The app has no auth
+// tokens or PII anywhere in browser storage.
 
 function applyTheme(themeId) {
   const valid = THEMES.find((t) => t.id === themeId) ? themeId : "sage";
@@ -65,8 +70,12 @@ export function ThemeProvider({ children }) {
     setThemeState(next);
     try {
       localStorage.setItem(THEME_STORAGE_KEY, next);
-    } catch {
-      /* localStorage may be blocked in some embed contexts; ignore. */
+    } catch (err) {
+      // localStorage may be blocked in some embedded / private-browsing
+      // contexts. Surface the failure so we can spot it in DevTools, but
+      // don't break the theme switch itself.
+      // eslint-disable-next-line no-console
+      console.warn("[theme] could not persist preference:", err?.message || err);
     }
   }, []);
 

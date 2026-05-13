@@ -163,7 +163,7 @@ export default function Settings() {
                 <div className="flex gap-1.5 mt-3">
                   {t.swatch.map((hex, i) => (
                     <span
-                      key={i}
+                      key={`${t.id}-${hex}-${i}`}
                       className="w-6 h-6 rounded shadow-sm"
                       style={{ backgroundColor: hex, border: "1px solid rgba(0,0,0,0.06)" }}
                     />
