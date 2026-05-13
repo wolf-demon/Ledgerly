@@ -55,16 +55,11 @@ export const ProjectProvider = ({ children }) => {
     else localStorage.removeItem(ACTIVE_KEY);
   }, [activeId]);
 
-  // Refresh the project list when the user comes back to the window — covers
-  // the "data went stale while I was on another app" pattern.
-  useEffect(() => {
-    const onFocus = () => {
-      reload();
-      setRevision((r) => r + 1);
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [reload]);
+  // NOTE: we deliberately do NOT auto-refresh on window.focus. In Electron and
+  // during dev-tools / screenshot interactions the focus event fires far more
+  // often than expected, which would re-trigger every page's load() and cause
+  // a "Loading…" flash. Mutations already call `bumpRevision()` to force a
+  // refresh; users can also navigate away and back to refetch.
 
   // Force every consumer to re-fetch immediately (used after destructive ops
   // like delete / upload / bulk-categorise that change data outside the page).

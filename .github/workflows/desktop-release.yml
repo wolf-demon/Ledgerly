@@ -71,6 +71,13 @@ jobs:
         shell: bash
         run: npm install -g yarn
 
+      # Ubuntu 22.04 ships libfuse3 but AppImage runtime needs libfuse2.
+      - name: Install libfuse2 (Linux AppImage runtime dep)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libfuse2 || sudo apt-get install -y fuse
+
       # ---- Bundled Python runtime ---------------------------------------
       - name: Download Python runtime (Windows)
         if: runner.os == 'Windows'
@@ -100,8 +107,21 @@ jobs:
         run: yarn install --frozen-lockfile
 
       # ---- macOS code-signing setup (only when secret is set) -----------
+      # GitHub Actions' `if:` evaluator can't read `secrets.*` directly, so we
+      # promote the secret to a job-level env var first and check that.
+      - name: Detect Apple cert availability
+        if: runner.os == 'macOS'
+        id: apple_cert
+        run: |
+          if [ -n "${{ secrets.APPLE_CERT_P12 }}" ]; then
+            echo "have_cert=true" >> $GITHUB_OUTPUT
+          else
+            echo "have_cert=false" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
       - name: Import Apple certificate
-        if: runner.os == 'macOS' && env.APPLE_CERT_P12 != ''
+        if: runner.os == 'macOS' && steps.apple_cert.outputs.have_cert == 'true'
         env:
           APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
           APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
@@ -127,6 +147,9 @@ jobs:
           # Windows code-signing (only used if the secrets are set):
           CSC_LINK: ${{ secrets.WINDOWS_CERT_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          # Skip Mac code-signing entirely when no cert is present (otherwise
+          # electron-builder errors out searching the keychain for an identity).
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && steps.apple_cert.outputs.have_cert == 'true' && 'true' || 'false' }}
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
             yarn dist:win

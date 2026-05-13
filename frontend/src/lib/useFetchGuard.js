@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 
 /**
  * Returns a stable `guard(fetcher)` function for use inside data-fetching
@@ -16,6 +16,9 @@ import { useEffect, useRef } from "react";
  *     });
  *   }, [deps]);
  *
+ * The returned function is referentially stable across renders so it is safe
+ * to include in useCallback / useEffect deps without re-triggering them.
+ *
  * Every time guard() is invoked, the previous in-flight request is marked
  * stale — so a slower response from a previous project can't overwrite the
  * newer project's state.
@@ -29,7 +32,7 @@ export function useFetchGuard() {
     return () => { epoch.current++; };
   }, []);
 
-  return (fetcher) => {
+  return useCallback((fetcher) => {
     const id = ++epoch.current;
     const isStale = () => id !== epoch.current;
     Promise.resolve(fetcher({ isStale })).catch((err) => {
@@ -42,5 +45,5 @@ export function useFetchGuard() {
         console.warn("[fetch-guard] request failed:", err?.message || err);
       }
     });
-  };
+  }, []);
 }

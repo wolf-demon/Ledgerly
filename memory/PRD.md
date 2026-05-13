@@ -129,7 +129,35 @@ N/A (no auth)
 - P3: Document the minimum Electron version that supports CSS `color-mix()` (Chromium 111+) or ship a PostCSS fallback for the theme tints.
 - P3: Wire `Skeleton`/`EmptyState` into more pages (Transactions list, Categories empty, Budgets empty) for fuller loading polish.
 
+### Iteration 15 (2026-02-13) — Bug-fixes: flash on empty pages, tx-not-showing, GitHub Actions
+
+**Reported by user:**
+1. "Loading transactions" ↔ "No transactions yet" flashing on Transactions + Recurring pages when project is empty.
+2. After iteration 14, freshly-added transactions don't show on the Transactions page.
+3. GitHub Actions desktop release failed on macOS and Ubuntu (Windows succeeded).
+
+**Root causes:**
+1+2. `useFetchGuard()` was returning a **fresh function on every render** (not memoised), which broke every `useCallback([..., guard])` in every page. That cascaded into the consuming `useEffect([load, revision])` re-firing every render → infinite fetch loop → flash + the final state setter often raced and never landed → the new transactions never appeared.
+   The aggressive `window.focus` listener I added in iteration 14 also fired far more often than expected in dev/Electron environments and exacerbated the loop.
+3. `desktop/package.json` referenced `build-resources/icon.ico` and `icon.icns` but the `build-resources/` folder didn't even exist in the repo — electron-builder fails on Mac and (with strict icon paths) on Linux AppImage. Compounded by a `if: env.APPLE_CERT_P12 != ''` expression in the workflow that evaluated before env was assigned, so the Mac code-signing step ran unconditionally and tried to import a non-existent cert.
+
+**Fixes:**
+- **`lib/useFetchGuard.js`**: returned function is now wrapped in `useCallback([], [])` so it's referentially stable across renders. Pages that depend on `guard` in `useCallback` deps no longer re-fire.
+- **`lib/projectContext.jsx`**: removed the `window.focus` auto-refresh. Mutations already call `bumpRevision()` — the focus listener was redundant and noisy.
+- **`desktop/build-resources/icon.png`** (new): 1024×1024 brand PNG generated programmatically (sage-green rounded square + cream "L" mark + tan ledger underline). electron-builder auto-converts to `.icns` on Mac and `.ico` on Windows at build time.
+- **`desktop/package.json`**: icon paths now uniformly point to the PNG; mac block adds `"identity": null` so unsigned local builds never block on keychain lookups.
+- **`.github/workflows/desktop-release.yml`**:
+  - Added `Install libfuse2` step for Linux runners (AppImage runtime dep on Ubuntu 22.04).
+  - Replaced broken `if: env.APPLE_CERT_P12 != ''` with a `Detect Apple cert availability` step that writes `have_cert=true|false` to `$GITHUB_OUTPUT`, and gates both the cert-import step and the build-step's `CSC_IDENTITY_AUTO_DISCOVERY` env on that output.
+  - When no Apple cert is configured, `CSC_IDENTITY_AUTO_DISCOVERY=false` skips the keychain search entirely so unsigned macOS builds succeed.
+
+**Verification:**
+- Playwright in browser preview: Empty project on `/transactions` → 3 state transitions max (`other` → `loading` → `empty`), final state stable. Rich project on `/transactions` → all 3 imported transactions visible by data-testid. Empty project on `/recurring` → 2 state transitions, no flash.
+- Backend regression: **115 passed / 1 skipped / 0 failed**.
+
 ### Iteration 14 (2026-02-13) — State-management hardening: project switch / delete / tx delete
+
+
 
 **Reported by user:**
 > "Switching projects isn't auto-updating the pages; deleting a project doesn't work; deleting a transaction doesn't auto-update the page. The app falls over very easily — I have to close and reopen it to fix things."
