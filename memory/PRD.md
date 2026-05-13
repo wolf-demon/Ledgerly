@@ -129,6 +129,33 @@ N/A (no auth)
 - P3: Document the minimum Electron version that supports CSS `color-mix()` (Chromium 111+) or ship a PostCSS fallback for the theme tints.
 - P3: Wire `Skeleton`/`EmptyState` into more pages (Transactions list, Categories empty, Budgets empty) for fuller loading polish.
 
+### Iteration 14 (2026-02-13) — State-management hardening: project switch / delete / tx delete
+
+**Reported by user:**
+> "Switching projects isn't auto-updating the pages; deleting a project doesn't work; deleting a transaction doesn't auto-update the page. The app falls over very easily — I have to close and reopen it to fix things."
+
+**Root causes identified:**
+1. Stale-response races: a slower fetch from project A could resolve after the user had already switched to project B and overwrite B's state.
+2. `active = projects.find(...)` was producing new object references whenever `projects` was replaced, causing `useEffect` chains to re-run spuriously and (combined with the race above) display stale data.
+3. `BankAccountProvider` cleared its selection too eagerly during the project-switch transition (the "drop invalid selection" effect fired against the *old* project's accounts list).
+4. Project delete waited on `await reload()` inside `finally{}` — when `reload()` itself threw the user was left stranded on a deleted project's URL with a flashing error overlay.
+5. Tx / category / project delete relied on a follow-up `load()` call; if that load fell behind, the UI rows lingered.
+6. Several mutating endpoints (categorize, split, AI auto-categorize, upload) didn't notify other pages, so Dashboard summary / Reports heatmap / Budgets progress could go stale until the user navigated away and back.
+
+**Fixes shipped:**
+- **`lib/projectContext.jsx` rewrite**: memoised `active`; new `revision` counter + `bumpRevision()`; `activeIdRef` to avoid stale-closure in `reload()`; clears `localStorage.activeProjectId` when activeId becomes null; `window.focus` listener that re-reads `/api/projects` so coming back to the app refreshes data.
+- **`lib/bankAccountContext.jsx`**: `fetchEpoch` ref so old project's `/bank-accounts` response can't overwrite the new one; clears `accounts` immediately on project switch; "drop invalid selection" effect now only fires after the new project's accounts have actually loaded.
+- **`lib/useFetchGuard.js`** (new): tiny `guard(async ({ isStale }) => …)` hook. Wired into Dashboard, Transactions, Categories, Reports, Recurring, Budgets, BudgetSummary — every page now ignores stale responses from before the latest fetch.
+- **Optimistic deletes** in Transactions (single + bulk), Categories (with child-detach), and project delete (Layout) — UI updates instantly; rolls back on failure; followed by a re-fetch to reconcile derived totals.
+- **`bumpRevision()` everywhere**: tx delete / bulk-delete / unsplit / bulk-categorize / reclassify / auto-categorize, category create/edit/delete, CSV + URL imports, post-import account reassign — all now fire `bumpRevision()` so Dashboard summary / Reports / Budgets re-fetch in place.
+- **`lib/api.js`**: global axios response interceptor downgrades unhandled errors from `console.error` → `console.warn` so CRA's dev error overlay no longer pops up on transient 403s during project switches / Cloudflare challenges.
+- **`Layout.jsx` delete**: navigate + bumpRevision now run BEFORE `reload()`, so the user is never stranded on the deleted-project URL even if the projects refresh hiccups.
+- **Project-switch UX**: removed `navigate('/')` from project-switch (kept on project-delete only) — switching now refreshes the user's CURRENT page in place instead of yanking them to Dashboard.
+
+**Tests:**
+- Pytest regression: **115 passed / 1 skipped / 0 failed** in 116.81s. No backend changes.
+- Frontend e2e (`/app/test_reports/iteration_14.json`): P0 in-place project refresh, rapid switching, and empty-state clearing all confirmed working end-to-end via Playwright. Project-delete + tx-delete partially verified manually before Cloudflare bot-protection started 403-ing the in-page fetches mid-test; the two robustness fixes above were applied off the back of the tester's action items.
+
 ### Iteration 13 (2026-02-12) — Theming engine + UI polish sweep + expanded category palette
 
 **User ask:** sweep ALL pages for visual consistency + micro-interactions + density, add more colour options for categories, add multiple selectable themes.

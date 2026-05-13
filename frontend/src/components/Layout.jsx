@@ -68,10 +68,16 @@ export default function Layout({ children, onNewProject }) {
         toast.success("Project deleted");
       } catch {
         toast.error("Failed to delete");
-      } finally {
+      }
+      // Always navigate + bump revision, even if the subsequent reload throws
+      // — so the user is never stranded on a stale URL pointing at a
+      // possibly-deleted project.
+      navigate("/");
+      bumpRevision();
+      try {
         await reload();
-        bumpRevision();
-        navigate("/");
+      } catch {
+        /* ignore — projects list will catch up on the next focus / nav. */
       }
     }, 80);
   };
