@@ -38,14 +38,14 @@
       "preload.js",
       "updater.js",
       "package.json",
-      "node_modules/**/*"
-    ],
-    "extraResources": [
+      "node_modules/**/*",
       {
         "from": "../frontend/build",
         "to": "frontend",
         "filter": ["**/*"]
-      },
+      }
+    ],
+    "extraResources": [
       {
         "from": "../backend",
         "to": "backend",

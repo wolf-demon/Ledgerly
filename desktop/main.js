@@ -49,7 +49,20 @@ function resolveBackendDir() {
 
 function resolveFrontendIndex() {
   if (isDev) return null; // dev uses http://127.0.0.1:3000
-  return path.join(process.resourcesPath, "frontend", "index.html");
+
+  const candidates = [
+    path.join(process.resourcesPath, "frontend", "index.html"),
+    path.join(process.resourcesPath, "app.asar", "frontend", "index.html"),
+    path.join(process.resourcesPath, "app.asar.unpacked", "frontend", "index.html"),
+    path.join(app.getAppPath(), "frontend", "index.html"),
+    path.join(__dirname, "frontend", "index.html"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  return candidates[0];
 }
 
 let backendReady = false;
